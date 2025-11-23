@@ -124,8 +124,8 @@ public class PanelPrestamos extends JPanel {
 
         // Crear modelo de tabla
         String[] columnas = {
-            "ID", "Cliente", "Artículo", "Monto", "Interés",
-            "Total Deuda", "F. Préstamo", "F. Vencimiento", "Días", "Estado"
+            "ID", "Cliente", "Monto", "Interés",
+            "Total Deuda", "F. Préstamo", "F. Vencimiento", "Estado"
         };
         modeloTabla = new DefaultTableModel(columnas, 0) {
             @Override
@@ -144,14 +144,12 @@ public class PanelPrestamos extends JPanel {
         // Configurar anchos de columnas
         tblPrestamos.getColumnModel().getColumn(0).setPreferredWidth(50);   // ID
         tblPrestamos.getColumnModel().getColumn(1).setPreferredWidth(80);   // Cliente
-        tblPrestamos.getColumnModel().getColumn(2).setPreferredWidth(80);   // Artículo
-        tblPrestamos.getColumnModel().getColumn(3).setPreferredWidth(100);  // Monto
-        tblPrestamos.getColumnModel().getColumn(4).setPreferredWidth(100);  // Interés
-        tblPrestamos.getColumnModel().getColumn(5).setPreferredWidth(100);  // Total
-        tblPrestamos.getColumnModel().getColumn(6).setPreferredWidth(100);  // F. Préstamo
-        tblPrestamos.getColumnModel().getColumn(7).setPreferredWidth(100);  // F. Vencimiento
-        tblPrestamos.getColumnModel().getColumn(8).setPreferredWidth(60);   // Días
-        tblPrestamos.getColumnModel().getColumn(9).setPreferredWidth(120);  // Estado
+        tblPrestamos.getColumnModel().getColumn(2).setPreferredWidth(100);  // Monto
+        tblPrestamos.getColumnModel().getColumn(3).setPreferredWidth(100);  // Interés
+        tblPrestamos.getColumnModel().getColumn(4).setPreferredWidth(100);  // Total
+        tblPrestamos.getColumnModel().getColumn(5).setPreferredWidth(100);  // F. Préstamo
+        tblPrestamos.getColumnModel().getColumn(6).setPreferredWidth(100);  // F. Vencimiento
+        tblPrestamos.getColumnModel().getColumn(7).setPreferredWidth(120);  // Estado
 
         // Renderizador personalizado para estados con colores
         DefaultTableCellRenderer rendererEstado = new DefaultTableCellRenderer() {
@@ -160,7 +158,7 @@ public class PanelPrestamos extends JPanel {
                     boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
-                if (column == 9 && value != null) { // Columna Estado
+                if (column == 7 && value != null) { // Columna Estado
                     String estado = value.toString();
                     if (!isSelected) {
                         switch (estado) {
@@ -198,19 +196,19 @@ public class PanelPrestamos extends JPanel {
                 return c;
             }
         };
-        tblPrestamos.getColumnModel().getColumn(9).setCellRenderer(rendererEstado);
+        tblPrestamos.getColumnModel().getColumn(7).setCellRenderer(rendererEstado);
 
         // Centrar contenido numérico
         DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
         centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 8; i++) {
             tblPrestamos.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
         }
 
         // Estilo del encabezado
         tblPrestamos.getTableHeader().setFont(new Font("Arial", Font.BOLD, 13));
         tblPrestamos.getTableHeader().setBackground(new Color(52, 73, 94));
-        tblPrestamos.getTableHeader().setForeground(Color.WHITE);
+        tblPrestamos.getTableHeader().setForeground(Color.BLACK);
         tblPrestamos.getTableHeader().setPreferredSize(new Dimension(0, 35));
 
         JScrollPane scrollPane = new JScrollPane(tblPrestamos);
@@ -311,21 +309,16 @@ public class PanelPrestamos extends JPanel {
         double sumaTotal = 0.0;
 
         for (Prestamo prestamo : prestamos) {
-            double totalDeuda = prestamo.getMonto() + prestamo.getInteresGenerado();
-
-            // Calcular días restantes o vencidos
-            String diasInfo = calcularDias(prestamo.getFechaVencimiento());
+            double totalDeuda = prestamo.getMonto() + prestamo.getInteresGenerado() + prestamo.getMulta();
 
             Object[] fila = {
                 prestamo.getIdPrestamo(),
                 "ID: " + prestamo.getIdCliente(),
-                "ID: " + prestamo.getIdArticulo(),
                 String.format("$%.2f", prestamo.getMonto()),
                 String.format("$%.2f", prestamo.getInteresGenerado()),
                 String.format("$%.2f", totalDeuda),
                 prestamo.getFechaPrestamo() != null ? sdf.format(prestamo.getFechaPrestamo()) : "N/A",
                 prestamo.getFechaVencimiento() != null ? sdf.format(prestamo.getFechaVencimiento()) : "N/A",
-                diasInfo,
                 prestamo.getEstadoPrestamo()
             };
             modeloTabla.addRow(fila);
@@ -381,13 +374,11 @@ public class PanelPrestamos extends JPanel {
             Object[] fila = {
                 prestamo.getIdPrestamo(),
                 "ID: " + prestamo.getIdCliente(),
-                "ID: " + prestamo.getIdArticulo(),
                 String.format("$%.2f", prestamo.getMonto()),
                 String.format("$%.2f", prestamo.getInteresGenerado()),
                 String.format("$%.2f", totalDeuda),
                 prestamo.getFechaPrestamo() != null ? sdf.format(prestamo.getFechaPrestamo()) : "N/A",
                 prestamo.getFechaVencimiento() != null ? sdf.format(prestamo.getFechaVencimiento()) : "N/A",
-                diasInfo,
                 prestamo.getEstadoPrestamo()
             };
             modeloTabla.addRow(fila);
@@ -425,13 +416,11 @@ public class PanelPrestamos extends JPanel {
                 Object[] fila = {
                     prestamo.getIdPrestamo(),
                     "ID: " + prestamo.getIdCliente(),
-                    "ID: " + prestamo.getIdArticulo(),
                     String.format("$%.2f", prestamo.getMonto()),
                     String.format("$%.2f", prestamo.getInteresGenerado()),
                     String.format("$%.2f", totalDeuda),
                     prestamo.getFechaPrestamo() != null ? sdf.format(prestamo.getFechaPrestamo()) : "N/A",
                     prestamo.getFechaVencimiento() != null ? sdf.format(prestamo.getFechaVencimiento()) : "N/A",
-                    diasInfo,
                     prestamo.getEstadoPrestamo()
                 };
                 modeloTabla.addRow(fila);
@@ -548,7 +537,7 @@ public class PanelPrestamos extends JPanel {
         double totalDeuda = prestamo.getMonto() + prestamo.getInteresGenerado();
 
         StringBuilder detalle = new StringBuilder();
-        detalle.append("═══════════════════════════════════════\n");
+        detalle.append("═══════════════════════════════���═══════\n");
         detalle.append("        DETALLES DEL PRÉSTAMO\n");
         detalle.append("═══════════════════════════════════════\n\n");
         detalle.append("ID Préstamo: ").append(prestamo.getIdPrestamo()).append("\n");
@@ -562,7 +551,7 @@ public class PanelPrestamos extends JPanel {
         detalle.append("Fecha Préstamo: ").append(prestamo.getFechaPrestamo() != null ? sdf.format(prestamo.getFechaPrestamo()) : "N/A").append("\n");
         detalle.append("Fecha Vencimiento: ").append(prestamo.getFechaVencimiento() != null ? sdf.format(prestamo.getFechaVencimiento()) : "N/A").append("\n");
         detalle.append("Estado: ").append(prestamo.getEstadoPrestamo()).append("\n");
-        detalle.append("═══════════════════════════════════════\n");
+        detalle.append("═══════════════════════════════���═══════\n");
 
         JTextArea textArea = new JTextArea(detalle.toString());
         textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
@@ -592,7 +581,7 @@ public class PanelPrestamos extends JPanel {
         }
 
         int idPrestamo = (int) modeloTabla.getValueAt(filaSeleccionada, 0);
-        String estado = (String) modeloTabla.getValueAt(filaSeleccionada, 9);
+        String estado = (String) modeloTabla.getValueAt(filaSeleccionada, 7);
 
         if ("CANCELADO".equals(estado)) {
             JOptionPane.showMessageDialog(this,

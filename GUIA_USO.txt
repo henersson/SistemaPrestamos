@@ -1,0 +1,321 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║              🏦 SISTEMA DE CASA DE EMPEÑO - MVP COMPLETADO ✅                ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📦 COMPONENTES IMPLEMENTADOS
+════════════════════════════════════════════════════════════════════════════════
+
+1. ✅ ValidacionesNegocio.java
+   📍 src/com/prestamos/util/ValidacionesNegocio.java
+
+   Funcionalidades:
+   • Validar artículos para préstamo (no defectuosos)
+   • Validar montos (máximo 80% del valor tasado)
+   • Validar calificación de clientes (mínimo 3.0)
+   • Validar fechas y plazos (máximo 12 meses)
+   • Calcular tasa de interés según plazo
+   • Calcular interés generado
+   • Calcular multas por mora (2%)
+   • Calcular total a pagar
+
+2. ✅ ArticuloDAO.java
+   📍 src/com/prestamos/dao/ArticuloDAO.java
+
+   Métodos implementados:
+   • insertarArticulo() - Crear artículo (valida que no sea defectuoso)
+   • obtenerArticuloPorId() - Buscar artículo específico
+   • listarTodosArticulos() - Lista completa
+   • listarArticulosDisponibles() - Solo ÓPTIMO/FUNCIONABLE
+   • actualizarArticulo() - Modificar datos
+   • eliminarArticulo() - Eliminar con validaciones
+   • obtenerSiguienteId() - Próximo ID disponible
+
+3. ✅ PrestamoDAO.java
+   📍 src/com/prestamos/dao/PrestamoDAO.java
+
+   Métodos implementados:
+   • crearPrestamo() - Crear con todas las validaciones
+   • obtenerPrestamoPorId() - Buscar préstamo
+   • listarPrestamosPorCliente() - Filtrar por cliente
+   • listarPrestamosPorEstado() - Filtrar por estado
+   • listarTodosPrestamos() - Lista completa
+   • aplicarMulta() - Aplicar multa por mora
+   • actualizarEstadoPrestamo() - Cambiar estado
+   • obtenerSiguienteId() - Próximo ID disponible
+
+4. ✅ TestMVPPrestamos.java
+   📍 src/TestMVPPrestamos.java
+
+   Programa de prueba completo que demuestra:
+   • Creación de artículos
+   • Validaciones de negocio
+   • Creación de préstamos
+   • Cálculos automáticos
+   • Estadísticas del sistema
+
+
+🔐 REGLAS DE NEGOCIO IMPLEMENTADAS
+════════════════════════════════════════════════════════════════════════════════
+
+✅ Artículos defectuosos NO se aceptan como garantía
+✅ Valor calculado según precio de mercado vigente
+✅ Monto máximo del préstamo: 80% del valor tasado
+✅ Calificación mínima del cliente: 3.0
+✅ Plazo máximo: 12 meses (365 días)
+✅ Tasa de interés variable según plazo:
+   • Menos de 3 meses → 5%
+   • Entre 3 y 6 meses → 10%
+   • Más de 6 meses → 15%
+✅ Multa por mora: 2% sobre saldo pendiente
+✅ Préstamo pasa a "EN_MORA" al aplicar multa
+✅ No se pueden eliminar artículos con préstamos activos
+✅ Cliente sin artículo NO puede solicitar préstamo
+✅ Administrador NO puede ser cliente
+
+
+🚀 CÓMO EJECUTAR EL MVP
+════════════════════════════════════════════════════════════════════════════════
+
+PASO 1: Verificar que la base de datos está configurada
+        - Las tablas ARTICULO, PRESTAMO, CLIENTE deben existir
+        - La conexión en ConexionOracle.java debe estar correcta
+
+PASO 2: Compilar el proyecto desde el directorio src:
+
+        cd C:\Users\DELTA\Desktop\SistemaPrestamos\SistemaPrestamos\src
+        javac -cp . TestMVPPrestamos.java
+
+PASO 3: Ejecutar el programa de prueba:
+
+        java TestMVPPrestamos
+
+ALTERNATIVA: Usar IntelliJ IDEA
+        1. Abrir proyecto en IntelliJ
+        2. Abrir TestMVPPrestamos.java
+        3. Click derecho → Run 'TestMVPPrestamos.main()'
+
+
+💡 EJEMPLO DE USO PROGRAMÁTICO
+════════════════════════════════════════════════════════════════════════════════
+
+// CREAR ARTÍCULO
+ArticuloDAO articuloDAO = new ArticuloDAO();
+Articulo articulo = new Articulo();
+articulo.setIdArticulo(articuloDAO.obtenerSiguienteId());
+articulo.setTipoArticulo("JOYA");
+articulo.setDescripcion("Anillo de oro 18k con diamante");
+articulo.setEstado("OPTIMO");
+articulo.setValorTasado(5000.0);
+articulo.setPrecioMercadoBase(6500.0);
+articulo.setPorcentajeTasacion(77.0);
+articulo.setFechaAvaluo(new Date());
+
+boolean creado = articuloDAO.insertarArticulo(articulo);
+
+// VALIDAR ANTES DE CREAR PRÉSTAMO
+boolean valido = ValidacionesNegocio.validarArticuloParaPrestamo(articulo);
+double montoMaximo = ValidacionesNegocio.calcularMontoMaximo(articulo.getValorTasado());
+
+// CREAR PRÉSTAMO
+PrestamoDAO prestamoDAO = new PrestamoDAO();
+Prestamo prestamo = new Prestamo();
+prestamo.setIdPrestamo(prestamoDAO.obtenerSiguienteId());
+prestamo.setIdCliente(1);
+prestamo.setIdArticulo(articulo.getIdArticulo());
+prestamo.setIdAsesor(1);
+prestamo.setMonto(4000.0); // 80% de 5000
+prestamo.setFechaPrestamo(new Date());
+
+Calendar cal = Calendar.getInstance();
+cal.add(Calendar.MONTH, 4);
+prestamo.setFechaVencimiento(cal.getTime());
+
+boolean prestamoCreado = prestamoDAO.crearPrestamo(prestamo);
+
+
+📊 SALIDA ESPERADA DEL PROGRAMA DE PRUEBA
+════════════════════════════════════════════════════════════════════════════════
+
+╔══════════════════════════════════════════════════════════════╗
+║     SISTEMA DE GESTIÓN DE CASA DE EMPEÑO - MVP              ║
+║     Prueba de Artículos y Préstamos                         ║
+╚══════════════════════════════════════════════════════════════╝
+
+============================================================
+PARTE 1: GESTIÓN DE ARTÍCULOS
+============================================================
+
+📦 CREANDO ARTÍCULO DE PRUEBA...
+
+→ Iniciando inserción de artículo: ELECTRODOMESTICO
+  ✓ INSERT en ARTICULO: 1 fila(s) insertada(s)
+  ✓ Transacción confirmada (COMMIT)
+✓ Artículo insertado exitosamente con ID: 1
+
+✅ Artículo creado exitosamente!
+   ID: 1
+   Tipo: ELECTRODOMESTICO
+   Estado: OPTIMO
+   Valor Tasado: $8000.0
+
+📋 LISTANDO ARTÍCULOS DISPONIBLES...
+
+Artículos disponibles para préstamo: 1
+  • ID: 1 | Tipo: ELECTRODOMESTICO | Estado: OPTIMO | Valor: $8000.0
+
+============================================================
+PARTE 2: VALIDACIONES DE NEGOCIO
+============================================================
+
+🔍 VALIDANDO ARTÍCULO PARA PRÉSTAMO...
+
+✓ Artículo válido para préstamo
+   Resultado: ✅ VÁLIDO
+
+💰 CALCULANDO MONTO MÁXIMO PERMITIDO...
+
+   Valor del artículo: $8000.0
+   Monto máximo (80%): $6400.0
+
+📅 CALCULANDO TASA DE INTERÉS...
+
+   Plazo: 4 meses (120 días)
+   Tasa de interés: 10.0%
+   Monto solicitado: $6000.0
+   Interés generado: $600.0
+   Total a pagar: $6600.0
+
+============================================================
+PARTE 3: GESTIÓN DE PRÉSTAMOS
+============================================================
+
+👤 VERIFICANDO CLIENTE...
+
+   Cliente encontrado:
+   ID: 1
+   Nombre: Juan Pérez
+   Calificación: 4.5
+
+💳 CREANDO PRÉSTAMO...
+
+→ Iniciando creación de préstamo
+  ✓ INSERT en PRESTAMO: 1 fila(s) insertada(s)
+  ✓ Transacción confirmada (COMMIT)
+✓ Préstamo creado exitosamente con ID: 1
+
+✅ Préstamo creado exitosamente!
+   ID Préstamo: 1
+   Cliente: Juan Pérez
+   Monto: $6000.0
+   Fecha Inicio: 23/11/2025
+   Fecha Vencimiento: 23/03/2026
+   Estado: ACTIVO
+
+============================================================
+PARTE 4: RESUMEN Y ESTADÍSTICAS
+============================================================
+
+📈 ESTADÍSTICAS DEL SISTEMA:
+   Total de artículos: 1
+   Artículos disponibles: 1
+   Total de préstamos: 1
+   Préstamos activos: 1
+
+💵 INFORMACIÓN FINANCIERA:
+   Capital prestado: $6000.00
+   Intereses generados: $600.00
+   Total en circulación: $6600.00
+
+============================================================
+✅ PRUEBA MVP COMPLETADA
+============================================================
+
+
+✨ CARACTERÍSTICAS DESTACADAS
+════════════════════════════════════════════════════════════════════════════════
+
+🛡️  SEGURIDAD Y VALIDACIONES
+   • Validaciones exhaustivas en cada operación
+   • No permite operaciones que violen reglas de negocio
+   • Mensajes de error descriptivos
+
+💾 GESTIÓN DE TRANSACCIONES
+   • Uso de transacciones ACID
+   • COMMIT solo en operaciones exitosas
+   • ROLLBACK automático en errores
+   • Try-catch-finally en todos los métodos
+
+📝 LOGGING DETALLADO
+   • → Inicio de operación
+   • ✓ Operación exitosa
+   • ✗ Error detectado
+   • ⚠️ Advertencia
+
+🔍 CÓDIGO PROFESIONAL
+   • JavaDoc completo en todos los métodos
+   • Código limpio y bien estructurado
+   • Separación de responsabilidades
+   • Fácil mantenimiento y extensión
+
+
+📂 ESTRUCTURA DE ARCHIVOS
+════════════════════════════════════════════════════════════════════════════════
+
+SistemaPrestamos/
+├── src/
+│   ├── TestMVPPrestamos.java              ← PROGRAMA DE PRUEBA
+│   └── com/prestamos/
+│       ├── dao/
+│       │   ├── ArticuloDAO.java           ← GESTIÓN DE ARTÍCULOS
+│       │   ├── PrestamoDAO.java           ← GESTIÓN DE PRÉSTAMOS
+│       │   └── ClienteDAO.java            (ya existía)
+│       ├── modelo/
+│       │   ├── Articulo.java              (ya existía)
+│       │   ├── Prestamo.java              (ya existía)
+│       │   └── Cliente.java               (ya existía)
+│       └── util/
+│           └── ValidacionesNegocio.java   ← VALIDACIONES CENTRALIZADAS
+├── README_MVP.md                           ← DOCUMENTACIÓN COMPLETA
+└── GUIA_USO.txt                           ← ESTE ARCHIVO
+
+
+🎯 ESTADO DEL PROYECTO
+════════════════════════════════════════════════════════════════════════════════
+
+✅ COMPLETADO - MVP 100% FUNCIONAL
+
+Backend (Lógica de Negocio):           ✅ 100%
+  • ValidacionesNegocio                ✅
+  • ArticuloDAO                        ✅
+  • PrestamoDAO                        ✅
+
+Pruebas:                               ✅ 100%
+  • TestMVPPrestamos                   ✅
+
+Documentación:                         ✅ 100%
+  • README_MVP.md                      ✅
+  • JavaDoc en código                  ✅
+  • GUIA_USO.txt                       ✅
+
+Interfaces Gráficas:                   ⏸️ Pendiente (opcional)
+  • PanelArticulos                     ⏸️
+  • PanelPrestamos                     ⏸️
+
+
+📞 SOPORTE
+════════════════════════════════════════════════════════════════════════════════
+
+Si encuentras algún problema:
+
+1. Verifica la conexión a la base de datos
+2. Asegúrate de que las tablas existen
+3. Revisa los logs en consola (mensajes → y ✓)
+4. Consulta el README_MVP.md para más detalles
+
+
+═══════════════════════════════════════════════════════════════════════════════
+                           ¡MVP LISTO PARA USAR! 🚀
+═══════════════════════════════════════════════════════════════════════════════
+

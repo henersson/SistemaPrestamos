@@ -120,7 +120,7 @@ public class DialogoPrestamo extends JDialog {
 
         gbc.gridx = 2;
         gbc.weightx = 0.2;
-        btnBuscarCliente = crearBotonIcono("🔍", new Color(52, 152, 219));
+        btnBuscarCliente = crearBotonIcono("Buscar", new Color(52, 152, 219));
         panelFormulario.add(btnBuscarCliente, gbc);
 
         // Fila 3: ID Artículo
@@ -138,7 +138,7 @@ public class DialogoPrestamo extends JDialog {
 
         gbc.gridx = 2;
         gbc.weightx = 0.2;
-        btnBuscarArticulo = crearBotonIcono("🔍", new Color(46, 204, 113));
+        btnBuscarArticulo = crearBotonIcono("Buscar", new Color(46, 204, 113));
         panelFormulario.add(btnBuscarArticulo, gbc);
 
         // Fila 4: ID Asesor
@@ -295,19 +295,9 @@ public class DialogoPrestamo extends JDialog {
         spinnerPlazo.addChangeListener(e -> calcularVistaPrevia());
         dateFechaPrestamo.addChangeListener(e -> calcularVistaPrevia());
 
-        btnBuscarCliente.addActionListener(e -> {
-            JOptionPane.showMessageDialog(this,
-                "Ingrese manualmente el ID del cliente.\n(Módulo de búsqueda disponible próximamente)",
-                "Información",
-                JOptionPane.INFORMATION_MESSAGE);
-        });
+        btnBuscarCliente.addActionListener(e -> buscarCliente());
 
-        btnBuscarArticulo.addActionListener(e -> {
-            JOptionPane.showMessageDialog(this,
-                "Ingrese manualmente el ID del artículo.\n(Módulo de búsqueda disponible próximamente)",
-                "Información",
-                JOptionPane.INFORMATION_MESSAGE);
-        });
+        btnBuscarArticulo.addActionListener(e -> buscarArticulo());
 
         add(panelFormulario, BorderLayout.CENTER);
 
@@ -368,13 +358,13 @@ public class DialogoPrestamo extends JDialog {
      */
     private JButton crearBotonIcono(String icono, Color color) {
         JButton boton = new JButton(icono);
-        boton.setFont(new Font("Arial", Font.PLAIN, 16));
+        boton.setFont(new Font("Arial", Font.BOLD, 11));
         boton.setBackground(color);
         boton.setForeground(Color.WHITE);
         boton.setFocusPainted(false);
         boton.setBorderPainted(false);
         boton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        boton.setPreferredSize(new Dimension(50, 35));
+        boton.setPreferredSize(new Dimension(70, 35));
         return boton;
     }
 
@@ -513,7 +503,20 @@ public class DialogoPrestamo extends JDialog {
 
         // Validar ID Artículo
         if (txtIdArticulo.getText().trim().isEmpty()) {
-            mostrarMensajeError("El ID del artículo es obligatorio.");
+            mostrarMensajeError("Debe seleccionar un artículo disponible para el préstamo.");
+            txtIdArticulo.requestFocus();
+            return false;
+        }
+        int idArticulo;
+        try {
+            idArticulo = Integer.parseInt(txtIdArticulo.getText().trim());
+            if (idArticulo <= 0) {
+                mostrarMensajeError("Debe seleccionar un artículo válido (ID > 0).");
+                txtIdArticulo.requestFocus();
+                return false;
+            }
+        } catch (NumberFormatException e) {
+            mostrarMensajeError("El ID del artículo debe ser un número válido.");
             txtIdArticulo.requestFocus();
             return false;
         }
@@ -584,5 +587,140 @@ public class DialogoPrestamo extends JDialog {
     public boolean isConfirmado() {
         return confirmado;
     }
-}
 
+    /**
+     * Abre un diálogo para buscar y seleccionar un cliente.
+     */
+    private void buscarCliente() {
+        try {
+            // Obtener lista de clientes
+            java.util.List<com.prestamos.modelo.Cliente> clientes = clienteDAO.listarTodosClientes();
+
+            if (clientes.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                    "No hay clientes registrados en el sistema.",
+                    "Sin Clientes",
+                    JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+
+            // Crear lista para mostrar en el diálogo
+            String[] opcionesClientes = new String[clientes.size()];
+            for (int i = 0; i < clientes.size(); i++) {
+                com.prestamos.modelo.Cliente cliente = clientes.get(i);
+                opcionesClientes[i] = String.format("ID: %d - %s (Calificación: %.2f)",
+                    cliente.getIdCliente(),
+                    cliente.getNombrePersona(),
+                    cliente.getCalificacion());
+            }
+
+            // Mostrar diálogo de selección
+            String seleccion = (String) JOptionPane.showInputDialog(
+                this,
+                "Seleccione un cliente:",
+                "Buscar Cliente",
+                JOptionPane.QUESTION_MESSAGE,
+                null,
+                opcionesClientes,
+                opcionesClientes[0]
+            );
+
+            // Si seleccionó algo, extraer el ID
+            if (seleccion != null) {
+                int idCliente = clientes.get(java.util.Arrays.asList(opcionesClientes).indexOf(seleccion)).getIdCliente();
+                txtIdCliente.setText(String.valueOf(idCliente));
+            }
+
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this,
+                "Error al buscar clientes: " + e.getMessage(),
+                "Error",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * Abre un diálogo para buscar y seleccionar un artículo.
+     */
+    private void buscarArticulo() {
+        try {
+            // Verificar que se haya seleccionado un cliente primero
+            if (txtIdCliente.getText().trim().isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                    "Por favor, seleccione primero un cliente.",
+                    "Cliente Requerido",
+                    JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            int idCliente = Integer.parseInt(txtIdCliente.getText().trim());
+
+            // Obtener artículos disponibles del cliente
+            java.util.List<com.prestamos.modelo.Articulo> articulos = articuloDAO.listarArticulosPorCliente(idCliente);
+
+            // Filtrar solo artículos disponibles
+            java.util.List<com.prestamos.modelo.Articulo> articulosDisponibles = new java.util.ArrayList<>();
+            for (com.prestamos.modelo.Articulo art : articulos) {
+                if ("DISPONIBLE".equalsIgnoreCase(art.getEstado())) {
+                    articulosDisponibles.add(art);
+                }
+            }
+
+            if (articulosDisponibles.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                    "El cliente no tiene artículos disponibles para empeñar.",
+                    "Sin Artículos",
+                    JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+
+            // Crear lista para mostrar en el diálogo
+            String[] opcionesArticulos = new String[articulosDisponibles.size()];
+            for (int i = 0; i < articulosDisponibles.size(); i++) {
+                com.prestamos.modelo.Articulo articulo = articulosDisponibles.get(i);
+                opcionesArticulos[i] = String.format("ID: %d - %s (%s) - Valor: $%.2f",
+                    articulo.getIdArticulo(),
+                    articulo.getNombre(),
+                    articulo.getTipoArticulo(),
+                    articulo.getValorTasado());
+            }
+
+            // Mostrar diálogo de selección
+            String seleccion = (String) JOptionPane.showInputDialog(
+                this,
+                "Seleccione un artículo:",
+                "Buscar Artículo",
+                JOptionPane.QUESTION_MESSAGE,
+                null,
+                opcionesArticulos,
+                opcionesArticulos[0]
+            );
+
+            // Si seleccionó algo, extraer el ID y sugerir monto
+            if (seleccion != null) {
+                com.prestamos.modelo.Articulo articuloSeleccionado =
+                    articulosDisponibles.get(java.util.Arrays.asList(opcionesArticulos).indexOf(seleccion));
+
+                txtIdArticulo.setText(String.valueOf(articuloSeleccionado.getIdArticulo()));
+
+                // Sugerir monto (80% del valor tasado)
+                double montoSugerido = articuloSeleccionado.getValorTasado() * 0.8;
+                txtMonto.setText(String.format("%.2f", montoSugerido));
+
+                // Recalcular vista previa
+                calcularVistaPrevia();
+            }
+
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this,
+                "ID de cliente inválido.",
+                "Error",
+                JOptionPane.ERROR_MESSAGE);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this,
+                "Error al buscar artículos: " + e.getMessage(),
+                "Error",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+}

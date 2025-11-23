@@ -268,23 +268,12 @@ public class FrmPrincipal extends JFrame {
         // Evento botón Préstamos
         btnPrestamos.addActionListener(e -> {
             System.out.println("→ Navegando a: Gestión de Préstamos");
-            JOptionPane.showMessageDialog(
-                this,
-                "Módulo de Gestión de Préstamos en desarrollo",
-                "Información",
-                JOptionPane.INFORMATION_MESSAGE
-            );
+            cambiarPanel(new PanelPrestamos());
         });
 
         // Evento botón Artículos
         btnArticulos.addActionListener(e -> {
-            System.out.println("→ Navegando a: Gestión de Artículos");
-            JOptionPane.showMessageDialog(
-                this,
-                "Módulo de Gestión de Artículos en desarrollo",
-                "Información",
-                JOptionPane.INFORMATION_MESSAGE
-            );
+            cambiarPanel(new PanelArticulos());
         });
 
         // Evento botón Asesores

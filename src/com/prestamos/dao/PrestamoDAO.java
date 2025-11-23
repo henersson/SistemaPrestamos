@@ -4,13 +4,14 @@ import java.sql.*;
 import java.util.*;
 import com.prestamos.modelo.Prestamo;
 import com.prestamos.config.ConexionOracle;
+import com.prestamos.util.ValidacionesNegocio;
 
 /**
  * Clase DAO (Data Access Object) para gestionar operaciones de Préstamo.
  * Implementa todas las operaciones CRUD y de negocio para préstamos.
  *
- * @author Henersson Cobo
- * @version 1.0
+ * @author Sistema de Préstamos
+ * @version 2.0
  * @since 2025-11-23
  */
 public class PrestamoDAO {
@@ -43,21 +44,19 @@ public class PrestamoDAO {
                 String estadoArticulo = rs.getString("ESTADO");
                 double valorTasado = rs.getDouble("VALOR_TASADO");
 
-                if ("DEFECTUOSO".equals(estadoArticulo)) {
+                if ("DEFECTUOSO".equalsIgnoreCase(estadoArticulo)) {
                     System.err.println("✗ ERROR: El artículo está en estado DEFECTUOSO");
                     conn.rollback();
                     return false;
                 }
 
-                // VALIDACIÓN 2: Monto no debe exceder el valor del artículo
-                if (prestamo.getMonto() > valorTasado) {
-                    System.err.println("✗ ERROR: El monto ($" + prestamo.getMonto() +
-                                     ") excede el valor tasado del artículo ($" + valorTasado + ")");
+                // VALIDACIÓN 2: Verificar que el monto no exceda el 80% del valor tasado
+                if (!ValidacionesNegocio.validarMontoPrestamo(prestamo.getMonto(), valorTasado)) {
                     conn.rollback();
                     return false;
                 }
             } else {
-                System.err.println("✗ ERROR: El artículo no existe");
+                System.err.println("✗ ERROR: No se encontró el artículo especificado");
                 conn.rollback();
                 return false;
             }
@@ -65,55 +64,49 @@ public class PrestamoDAO {
             pstmtCheck.close();
 
             // VALIDACIÓN 3: Verificar calificación del cliente
-            String sqlCheckCliente = "SELECT CALIFICACION, ACTIVO FROM CLIENTE WHERE ID_PERSONA = ?";
+            String sqlCheckCliente = "SELECT c.CALIFICACION FROM CLIENTE c WHERE c.ID_CLIENTE = ?";
             pstmtCheck = conn.prepareStatement(sqlCheckCliente);
             pstmtCheck.setInt(1, prestamo.getIdCliente());
             rs = pstmtCheck.executeQuery();
 
             if (rs.next()) {
                 double calificacion = rs.getDouble("CALIFICACION");
-                String activo = rs.getString("ACTIVO");
-
-                if (!"S".equals(activo)) {
-                    System.err.println("✗ ERROR: El cliente no está activo");
+                if (calificacion < 3.0) {
+                    System.err.println("✗ ERROR: El cliente requiere calificación mínima de 3.0. Actual: " + calificacion);
                     conn.rollback();
                     return false;
                 }
-
-                if (calificacion < 5.0) {
-                    System.err.println("✗ ERROR: El cliente tiene calificación insuficiente: " + calificacion);
-                    conn.rollback();
-                    return false;
-                }
-            } else {
-                System.err.println("✗ ERROR: El cliente no existe");
-                conn.rollback();
-                return false;
             }
             rs.close();
             pstmtCheck.close();
 
-            // Insertar préstamo (los triggers calcularán interés y validarán artículo)
-            String sqlInsert = "INSERT INTO PRESTAMO (ID_PRESTAMO, ID_ASESOR, ID_CLIENTE, ID_ARTICULO, " +
-                             "MONTO, FECHA_PRESTAMO, FECHA_VENCIMIENTO, TASA_INTERES, ESTADO_PRESTAMO) " +
-                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            // Calcular tasa de interés según el plazo
+            double tasaInteres = ValidacionesNegocio.calcularTasaInteres(
+                prestamo.getFechaPrestamo(),
+                prestamo.getFechaVencimiento()
+            );
+            double interesGenerado = ValidacionesNegocio.calcularInteresGenerado(
+                prestamo.getMonto(),
+                tasaInteres
+            );
+
+            // Insertar préstamo
+            String sqlInsert = "INSERT INTO PRESTAMO (ID_PRESTAMO, ID_CLIENTE, ID_ARTICULO, ID_ASESOR, " +
+                              "ESTADO_PRESTAMO, MONTO, INTERES_GENERADO, FECHA_PRESTAMO, FECHA_VENCIMIENTO, " +
+                              "TASA_INTERES, MULTA) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
             pstmtInsert = conn.prepareStatement(sqlInsert);
             pstmtInsert.setInt(1, prestamo.getIdPrestamo());
-            pstmtInsert.setInt(2, prestamo.getIdAsesor());
-            pstmtInsert.setInt(3, prestamo.getIdCliente());
-            pstmtInsert.setInt(4, prestamo.getIdArticulo());
-            pstmtInsert.setDouble(5, prestamo.getMonto());
-
-            if (prestamo.getFechaPrestamo() != null) {
-                pstmtInsert.setDate(6, new java.sql.Date(prestamo.getFechaPrestamo().getTime()));
-            } else {
-                pstmtInsert.setDate(6, new java.sql.Date(System.currentTimeMillis()));
-            }
-
-            pstmtInsert.setDate(7, new java.sql.Date(prestamo.getFechaVencimiento().getTime()));
-            pstmtInsert.setDouble(8, prestamo.getTasaInteres());
-            pstmtInsert.setString(9, "ACTIVO");
+            pstmtInsert.setInt(2, prestamo.getIdCliente());
+            pstmtInsert.setInt(3, prestamo.getIdArticulo());
+            pstmtInsert.setInt(4, prestamo.getIdAsesor());
+            pstmtInsert.setString(5, "ACTIVO");
+            pstmtInsert.setDouble(6, prestamo.getMonto());
+            pstmtInsert.setDouble(7, interesGenerado);
+            pstmtInsert.setDate(8, new java.sql.Date(prestamo.getFechaPrestamo().getTime()));
+            pstmtInsert.setDate(9, new java.sql.Date(prestamo.getFechaVencimiento().getTime()));
+            pstmtInsert.setDouble(10, tasaInteres);
+            pstmtInsert.setDouble(11, 0.0); // Sin multa inicial
 
             int filas = pstmtInsert.executeUpdate();
             System.out.println("  ✓ INSERT en PRESTAMO: " + filas + " fila(s) insertada(s)");
@@ -131,13 +124,8 @@ public class PrestamoDAO {
         } catch (SQLException e) {
             System.err.println("✗ Error al crear préstamo");
             System.err.println("  Mensaje: " + e.getMessage());
-            System.err.println("  Código SQL: " + e.getErrorCode());
-
             try {
-                if (conn != null) {
-                    conn.rollback();
-                    System.err.println("  ✓ Rollback ejecutado");
-                }
+                if (conn != null) conn.rollback();
             } catch (SQLException ex) {
                 System.err.println("  ✗ Error en rollback: " + ex.getMessage());
             }
@@ -160,7 +148,7 @@ public class PrestamoDAO {
      * Obtiene un préstamo por su ID con información completa.
      *
      * @param idPrestamo ID del préstamo a buscar
-     * @return objeto Prestamo con los datos completos
+     * @return objeto Prestamo con los datos, null si no se encuentra
      */
     public Prestamo obtenerPrestamoPorId(int idPrestamo) {
         Connection conn = null;
@@ -172,9 +160,9 @@ public class PrestamoDAO {
             conn = ConexionOracle.getConexion();
             System.out.println("→ Buscando préstamo con ID: " + idPrestamo);
 
-            String sql = "SELECT p.ID_PRESTAMO, p.ID_ASESOR, p.ID_CLIENTE, p.ID_ARTICULO, " +
-                        "p.MONTO, p.INTERES_GENERADO, 0 AS MULTA, " +
-                        "p.FECHA_PRESTAMO, p.FECHA_VENCIMIENTO, p.TASA_INTERES, p.ESTADO_PRESTAMO " +
+            String sql = "SELECT p.ID_PRESTAMO, p.ID_CLIENTE, p.ID_ARTICULO, p.ID_ASESOR, " +
+                        "p.ESTADO_PRESTAMO, p.MONTO, p.INTERES_GENERADO, p.FECHA_PRESTAMO, " +
+                        "p.FECHA_VENCIMIENTO, p.TASA_INTERES, p.MULTA " +
                         "FROM PRESTAMO p WHERE p.ID_PRESTAMO = ?";
 
             pstmt = conn.prepareStatement(sql);
@@ -184,25 +172,18 @@ public class PrestamoDAO {
             if (rs.next()) {
                 prestamo = new Prestamo();
                 prestamo.setIdPrestamo(rs.getInt("ID_PRESTAMO"));
-                prestamo.setIdAsesor(rs.getInt("ID_ASESOR"));
                 prestamo.setIdCliente(rs.getInt("ID_CLIENTE"));
                 prestamo.setIdArticulo(rs.getInt("ID_ARTICULO"));
+                prestamo.setIdAsesor(rs.getInt("ID_ASESOR"));
+                prestamo.setEstadoPrestamo(rs.getString("ESTADO_PRESTAMO"));
                 prestamo.setMonto(rs.getDouble("MONTO"));
                 prestamo.setInteresGenerado(rs.getDouble("INTERES_GENERADO"));
-                prestamo.setEstadoPrestamo(rs.getString("ESTADO_PRESTAMO"));
+                prestamo.setFechaPrestamo(rs.getDate("FECHA_PRESTAMO"));
+                prestamo.setFechaVencimiento(rs.getDate("FECHA_VENCIMIENTO"));
                 prestamo.setTasaInteres(rs.getDouble("TASA_INTERES"));
+                prestamo.setMulta(rs.getDouble("MULTA"));
 
-                java.sql.Date fechaPrestamo = rs.getDate("FECHA_PRESTAMO");
-                if (fechaPrestamo != null) {
-                    prestamo.setFechaPrestamo(new java.util.Date(fechaPrestamo.getTime()));
-                }
-
-                java.sql.Date fechaVencimiento = rs.getDate("FECHA_VENCIMIENTO");
-                if (fechaVencimiento != null) {
-                    prestamo.setFechaVencimiento(new java.util.Date(fechaVencimiento.getTime()));
-                }
-
-                System.out.println("✓ Préstamo encontrado - Estado: " + prestamo.getEstadoPrestamo());
+                System.out.println("✓ Préstamo encontrado. Estado: " + prestamo.getEstadoPrestamo());
             } else {
                 System.out.println("  ⚠ No se encontró préstamo con ID: " + idPrestamo);
             }
@@ -240,9 +221,9 @@ public class PrestamoDAO {
             conn = ConexionOracle.getConexion();
             System.out.println("→ Listando préstamos del cliente ID: " + idCliente);
 
-            String sql = "SELECT ID_PRESTAMO, ID_ASESOR, ID_CLIENTE, ID_ARTICULO, " +
-                        "MONTO, INTERES_GENERADO, NVL(MULTA, 0) AS MULTA, " +
-                        "FECHA_PRESTAMO, FECHA_VENCIMIENTO, TASA_INTERES, ESTADO_PRESTAMO " +
+            String sql = "SELECT ID_PRESTAMO, ID_CLIENTE, ID_ASESOR, " +
+                        "ESTADO_PRESTAMO, MONTO, INTERES_GENERADO, FECHA_PRESTAMO, " +
+                        "FECHA_VENCIMIENTO, TASA_INTERES " +
                         "FROM PRESTAMO WHERE ID_CLIENTE = ? ORDER BY FECHA_PRESTAMO DESC";
 
             pstmt = conn.prepareStatement(sql);
@@ -252,28 +233,19 @@ public class PrestamoDAO {
             while (rs.next()) {
                 Prestamo prestamo = new Prestamo();
                 prestamo.setIdPrestamo(rs.getInt("ID_PRESTAMO"));
-                prestamo.setIdAsesor(rs.getInt("ID_ASESOR"));
                 prestamo.setIdCliente(rs.getInt("ID_CLIENTE"));
-                prestamo.setIdArticulo(rs.getInt("ID_ARTICULO"));
+                prestamo.setIdAsesor(rs.getInt("ID_ASESOR"));
+                prestamo.setEstadoPrestamo(rs.getString("ESTADO_PRESTAMO"));
                 prestamo.setMonto(rs.getDouble("MONTO"));
                 prestamo.setInteresGenerado(rs.getDouble("INTERES_GENERADO"));
-                prestamo.setEstadoPrestamo(rs.getString("ESTADO_PRESTAMO"));
+                prestamo.setFechaPrestamo(rs.getDate("FECHA_PRESTAMO"));
+                prestamo.setFechaVencimiento(rs.getDate("FECHA_VENCIMIENTO"));
                 prestamo.setTasaInteres(rs.getDouble("TASA_INTERES"));
-
-                java.sql.Date fechaPrestamo = rs.getDate("FECHA_PRESTAMO");
-                if (fechaPrestamo != null) {
-                    prestamo.setFechaPrestamo(new java.util.Date(fechaPrestamo.getTime()));
-                }
-
-                java.sql.Date fechaVencimiento = rs.getDate("FECHA_VENCIMIENTO");
-                if (fechaVencimiento != null) {
-                    prestamo.setFechaVencimiento(new java.util.Date(fechaVencimiento.getTime()));
-                }
 
                 prestamos.add(prestamo);
             }
 
-            System.out.println("✓ Préstamos del cliente: " + prestamos.size());
+            System.out.println("✓ Se encontraron " + prestamos.size() + " préstamos");
 
         } catch (SQLException e) {
             System.err.println("✗ Error al listar préstamos por cliente");
@@ -293,9 +265,63 @@ public class PrestamoDAO {
     }
 
     /**
-     * Lista préstamos filtrados por estado.
+     * Lista todos los préstamos de la base de datos.
      *
-     * @param estado Estado del préstamo (ACTIVO, CANCELADO, EN_MORA, VENCIDO, ARTICULO_TRANSFERIDO)
+     * @return lista de todos los préstamos
+     */
+    public List<Prestamo> listarTodosPrestamos() {
+        List<Prestamo> prestamos = new ArrayList<>();
+        Connection conn = null;
+        Statement stmt = null;
+        ResultSet rs = null;
+
+        try {
+            conn = ConexionOracle.getConexion();
+            System.out.println("→ Listando todos los préstamos");
+
+            String sql = "SELECT ID_PRESTAMO, ID_CLIENTE, ID_ASESOR, ESTADO_PRESTAMO, MONTO, INTERES_GENERADO, FECHA_PRESTAMO, FECHA_VENCIMIENTO, TASA_INTERES FROM PRESTAMO ORDER BY FECHA_PRESTAMO DESC";
+
+            stmt = conn.createStatement();
+            rs = stmt.executeQuery(sql);
+
+            while (rs.next()) {
+                Prestamo prestamo = new Prestamo();
+                prestamo.setIdPrestamo(rs.getInt("ID_PRESTAMO"));
+                prestamo.setIdCliente(rs.getInt("ID_CLIENTE"));
+                prestamo.setIdAsesor(rs.getInt("ID_ASESOR"));
+                prestamo.setEstadoPrestamo(rs.getString("ESTADO_PRESTAMO"));
+                prestamo.setMonto(rs.getDouble("MONTO"));
+                prestamo.setInteresGenerado(rs.getDouble("INTERES_GENERADO"));
+                // prestamo.setMulta(0.0); // No existe la columna MULTA
+                prestamo.setFechaPrestamo(rs.getDate("FECHA_PRESTAMO"));
+                prestamo.setFechaVencimiento(rs.getDate("FECHA_VENCIMIENTO"));
+                prestamo.setTasaInteres(rs.getDouble("TASA_INTERES"));
+                prestamos.add(prestamo);
+            }
+
+            System.out.println("✓ Se encontraron " + prestamos.size() + " préstamos");
+
+        } catch (SQLException e) {
+            System.err.println("✗ Error al listar préstamos");
+            System.err.println("  Mensaje: " + e.getMessage());
+            e.printStackTrace();
+
+        } finally {
+            try {
+                if (rs != null) rs.close();
+                if (stmt != null) stmt.close();
+            } catch (SQLException e) {
+                System.err.println("  ✗ Error al cerrar recursos: " + e.getMessage());
+            }
+        }
+
+        return prestamos;
+    }
+
+    /**
+     * Lista todos los préstamos filtrados por estado.
+     *
+     * @param estado estado del préstamo a filtrar
      * @return lista de préstamos con el estado especificado
      */
     public List<Prestamo> listarPrestamosPorEstado(String estado) {
@@ -308,10 +334,7 @@ public class PrestamoDAO {
             conn = ConexionOracle.getConexion();
             System.out.println("→ Listando préstamos con estado: " + estado);
 
-            String sql = "SELECT ID_PRESTAMO, ID_ASESOR, ID_CLIENTE, ID_ARTICULO, " +
-                        "MONTO, INTERES_GENERADO, NVL(MULTA, 0) AS MULTA, " +
-                        "FECHA_PRESTAMO, FECHA_VENCIMIENTO, TASA_INTERES, ESTADO_PRESTAMO " +
-                        "FROM PRESTAMO WHERE ESTADO_PRESTAMO = ? ORDER BY FECHA_VENCIMIENTO";
+            String sql = "SELECT ID_PRESTAMO, ID_CLIENTE, ID_ASESOR, ESTADO_PRESTAMO, MONTO, INTERES_GENERADO, FECHA_PRESTAMO, FECHA_VENCIMIENTO, TASA_INTERES FROM PRESTAMO WHERE ESTADO_PRESTAMO = ? ORDER BY FECHA_PRESTAMO DESC";
 
             pstmt = conn.prepareStatement(sql);
             pstmt.setString(1, estado);
@@ -320,28 +343,19 @@ public class PrestamoDAO {
             while (rs.next()) {
                 Prestamo prestamo = new Prestamo();
                 prestamo.setIdPrestamo(rs.getInt("ID_PRESTAMO"));
-                prestamo.setIdAsesor(rs.getInt("ID_ASESOR"));
                 prestamo.setIdCliente(rs.getInt("ID_CLIENTE"));
-                prestamo.setIdArticulo(rs.getInt("ID_ARTICULO"));
+                prestamo.setIdAsesor(rs.getInt("ID_ASESOR"));
+                prestamo.setEstadoPrestamo(rs.getString("ESTADO_PRESTAMO"));
                 prestamo.setMonto(rs.getDouble("MONTO"));
                 prestamo.setInteresGenerado(rs.getDouble("INTERES_GENERADO"));
-                prestamo.setEstadoPrestamo(rs.getString("ESTADO_PRESTAMO"));
+                // prestamo.setMulta(0.0); // No existe la columna MULTA
+                prestamo.setFechaPrestamo(rs.getDate("FECHA_PRESTAMO"));
+                prestamo.setFechaVencimiento(rs.getDate("FECHA_VENCIMIENTO"));
                 prestamo.setTasaInteres(rs.getDouble("TASA_INTERES"));
-
-                java.sql.Date fechaPrestamo = rs.getDate("FECHA_PRESTAMO");
-                if (fechaPrestamo != null) {
-                    prestamo.setFechaPrestamo(new java.util.Date(fechaPrestamo.getTime()));
-                }
-
-                java.sql.Date fechaVencimiento = rs.getDate("FECHA_VENCIMIENTO");
-                if (fechaVencimiento != null) {
-                    prestamo.setFechaVencimiento(new java.util.Date(fechaVencimiento.getTime()));
-                }
-
                 prestamos.add(prestamo);
             }
 
-            System.out.println("✓ Préstamos encontrados: " + prestamos.size());
+            System.out.println("✓ Se encontraron " + prestamos.size() + " préstamos con estado " + estado);
 
         } catch (SQLException e) {
             System.err.println("✗ Error al listar préstamos por estado");
@@ -361,138 +375,188 @@ public class PrestamoDAO {
     }
 
     /**
-     * Lista todos los préstamos vencidos.
+     * Aplica una multa a un préstamo por mora.
      *
-     * @return lista de préstamos vencidos
+     * @param idPrestamo ID del préstamo
+     * @param montoMulta monto de la multa a aplicar
+     * @return true si se aplicó correctamente, false en caso contrario
      */
-    public List<Prestamo> listarPrestamosVencidos() {
-        List<Prestamo> prestamos = new ArrayList<>();
+    public boolean aplicarMulta(int idPrestamo, double montoMulta) {
         Connection conn = null;
         PreparedStatement pstmt = null;
-        ResultSet rs = null;
 
         try {
             conn = ConexionOracle.getConexion();
-            System.out.println("→ Listando préstamos vencidos");
+            System.out.println("→ Aplicando multa al préstamo ID: " + idPrestamo);
 
-            String sql = "SELECT ID_PRESTAMO, ID_ASESOR, ID_CLIENTE, ID_ARTICULO, " +
-                        "MONTO, INTERES_GENERADO, NVL(MULTA, 0) AS MULTA, " +
-                        "FECHA_PRESTAMO, FECHA_VENCIMIENTO, TASA_INTERES, ESTADO_PRESTAMO, " +
-                        "TRUNC(SYSDATE - FECHA_VENCIMIENTO) AS DIAS_VENCIDO " +
-                        "FROM PRESTAMO " +
-                        "WHERE ESTADO_PRESTAMO = 'VENCIDO' " +
-                        "ORDER BY FECHA_VENCIMIENTO";
+            conn.setAutoCommit(false);
+
+            String sql = "UPDATE PRESTAMO SET MULTA = MULTA + ?, ESTADO_PRESTAMO = 'EN_MORA' " +
+                        "WHERE ID_PRESTAMO = ?";
 
             pstmt = conn.prepareStatement(sql);
-            rs = pstmt.executeQuery();
+            pstmt.setDouble(1, montoMulta);
+            pstmt.setInt(2, idPrestamo);
 
-            while (rs.next()) {
-                Prestamo prestamo = new Prestamo();
-                prestamo.setIdPrestamo(rs.getInt("ID_PRESTAMO"));
-                prestamo.setIdAsesor(rs.getInt("ID_ASESOR"));
-                prestamo.setIdCliente(rs.getInt("ID_CLIENTE"));
-                prestamo.setIdArticulo(rs.getInt("ID_ARTICULO"));
-                prestamo.setMonto(rs.getDouble("MONTO"));
-                prestamo.setInteresGenerado(rs.getDouble("INTERES_GENERADO"));
-                prestamo.setEstadoPrestamo(rs.getString("ESTADO_PRESTAMO"));
-                prestamo.setTasaInteres(rs.getDouble("TASA_INTERES"));
+            int filas = pstmt.executeUpdate();
 
-                java.sql.Date fechaPrestamo = rs.getDate("FECHA_PRESTAMO");
-                if (fechaPrestamo != null) {
-                    prestamo.setFechaPrestamo(new java.util.Date(fechaPrestamo.getTime()));
-                }
-
-                java.sql.Date fechaVencimiento = rs.getDate("FECHA_VENCIMIENTO");
-                if (fechaVencimiento != null) {
-                    prestamo.setFechaVencimiento(new java.util.Date(fechaVencimiento.getTime()));
-                }
-
-                prestamos.add(prestamo);
+            if (filas > 0) {
+                conn.commit();
+                System.out.println("✓ Multa aplicada exitosamente: $" + montoMulta);
+                return true;
+            } else {
+                conn.rollback();
+                System.err.println("✗ No se encontró el préstamo");
+                return false;
             }
 
-            System.out.println("✓ Préstamos vencidos: " + prestamos.size());
-
         } catch (SQLException e) {
-            System.err.println("✗ Error al listar préstamos vencidos");
+            System.err.println("✗ Error al aplicar multa");
             System.err.println("  Mensaje: " + e.getMessage());
-            e.printStackTrace();
+            try {
+                if (conn != null) conn.rollback();
+            } catch (SQLException ex) {
+                System.err.println("  ✗ Error en rollback: " + ex.getMessage());
+            }
+            return false;
 
         } finally {
             try {
-                if (rs != null) rs.close();
                 if (pstmt != null) pstmt.close();
+                if (conn != null) conn.setAutoCommit(true);
             } catch (SQLException e) {
                 System.err.println("  ✗ Error al cerrar recursos: " + e.getMessage());
             }
         }
+    }
 
-        return prestamos;
+    /**
+     * Actualiza el estado de un préstamo.
+     *
+     * @param idPrestamo ID del préstamo
+     * @param nuevoEstado nuevo estado del préstamo
+     * @return true si se actualizó correctamente, false en caso contrario
+     */
+    public boolean actualizarEstadoPrestamo(int idPrestamo, String nuevoEstado) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+
+        try {
+            conn = ConexionOracle.getConexion();
+            System.out.println("→ Actualizando estado del préstamo ID: " + idPrestamo + " a: " + nuevoEstado);
+
+            conn.setAutoCommit(false);
+
+            String sql = "UPDATE PRESTAMO SET ESTADO_PRESTAMO = ? WHERE ID_PRESTAMO = ?";
+
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, nuevoEstado);
+            pstmt.setInt(2, idPrestamo);
+
+            int filas = pstmt.executeUpdate();
+
+            if (filas > 0) {
+                conn.commit();
+                System.out.println("✓ Estado actualizado exitosamente");
+                return true;
+            } else {
+                conn.rollback();
+                System.err.println("✗ No se encontró el préstamo");
+                return false;
+            }
+
+        } catch (SQLException e) {
+            System.err.println("✗ Error al actualizar estado");
+            System.err.println("  Mensaje: " + e.getMessage());
+            try {
+                if (conn != null) conn.rollback();
+            } catch (SQLException ex) {
+                System.err.println("  ✗ Error en rollback: " + ex.getMessage());
+            }
+            return false;
+
+        } finally {
+            try {
+                if (pstmt != null) pstmt.close();
+                if (conn != null) conn.setAutoCommit(true);
+            } catch (SQLException e) {
+                System.err.println("  ✗ Error al cerrar recursos: " + e.getMessage());
+            }
+        }
     }
 
     /**
      * Registra un pago para un préstamo.
-     * Si el pago cubre la deuda total, cambia el estado a CANCELADO.
      *
      * @param idPrestamo ID del préstamo
-     * @param montoPago Monto del pago realizado
-     * @return true si el registro fue exitoso, false en caso contrario
+     * @param montoPago monto del pago a registrar
+     * @return true si se registró correctamente, false en caso contrario
      */
     public boolean registrarPago(int idPrestamo, double montoPago) {
         Connection conn = null;
-        PreparedStatement pstmtCheck = null;
-        PreparedStatement pstmtUpdate = null;
+        PreparedStatement pstmtConsulta = null;
+        PreparedStatement pstmtActualiza = null;
         ResultSet rs = null;
 
         try {
             conn = ConexionOracle.getConexion();
-            System.out.println("→ Registrando pago para préstamo ID: " + idPrestamo);
-            System.out.println("  Monto del pago: $" + montoPago);
+            System.out.println("→ Registrando pago de $" + montoPago + " para préstamo ID: " + idPrestamo);
 
             conn.setAutoCommit(false);
 
-            // Obtener deuda total
-            String sqlCheck = "SELECT MONTO, INTERES_GENERADO, NVL(MULTA, 0) AS MULTA, ESTADO_PRESTAMO " +
-                            "FROM PRESTAMO WHERE ID_PRESTAMO = ?";
-
-            pstmtCheck = conn.prepareStatement(sqlCheck);
-            pstmtCheck.setInt(1, idPrestamo);
-            rs = pstmtCheck.executeQuery();
+            // Obtener información del préstamo actual
+            String sqlConsulta = "SELECT MONTO, INTERES_GENERADO, MULTA FROM PRESTAMO WHERE ID_PRESTAMO = ?";
+            pstmtConsulta = conn.prepareStatement(sqlConsulta);
+            pstmtConsulta.setInt(1, idPrestamo);
+            rs = pstmtConsulta.executeQuery();
 
             if (rs.next()) {
                 double monto = rs.getDouble("MONTO");
                 double interes = rs.getDouble("INTERES_GENERADO");
                 double multa = rs.getDouble("MULTA");
-                String estado = rs.getString("ESTADO_PRESTAMO");
-                double deudaTotal = monto + interes + multa;
+                double totalDeuda = monto + interes + multa;
+                double pagoRestante = montoPago;
 
-                System.out.println("  Deuda total: $" + deudaTotal);
+                // Descontar primero multa
+                double pagoMulta = Math.min(multa, pagoRestante);
+                multa -= pagoMulta;
+                pagoRestante -= pagoMulta;
 
-                if ("CANCELADO".equals(estado)) {
-                    System.err.println("✗ ERROR: El préstamo ya está cancelado");
-                    conn.rollback();
-                    return false;
-                }
+                // Luego interés
+                double pagoInteres = Math.min(interes, pagoRestante);
+                interes -= pagoInteres;
+                pagoRestante -= pagoInteres;
 
-                // Si el pago cubre la deuda total, cancelar préstamo
-                String nuevoEstado = (montoPago >= deudaTotal) ? "CANCELADO" : estado;
+                // Finalmente monto
+                double pagoMonto = Math.min(monto, pagoRestante);
+                monto -= pagoMonto;
+                pagoRestante -= pagoMonto;
 
-                String sqlUpdate = "UPDATE PRESTAMO SET ESTADO_PRESTAMO = ? WHERE ID_PRESTAMO = ?";
-                pstmtUpdate = conn.prepareStatement(sqlUpdate);
-                pstmtUpdate.setString(1, nuevoEstado);
-                pstmtUpdate.setInt(2, idPrestamo);
-
-                int filas = pstmtUpdate.executeUpdate();
-
-                if (filas > 0) {
+                if (monto <= 0 && interes <= 0 && multa <= 0) {
+                    // Pago completo - cambiar estado a CANCELADO y dejar todo en 0
+                    String sqlActualiza = "UPDATE PRESTAMO SET ESTADO_PRESTAMO = 'CANCELADO', MONTO = 0, INTERES_GENERADO = 0, MULTA = 0 WHERE ID_PRESTAMO = ?";
+                    pstmtActualiza = conn.prepareStatement(sqlActualiza);
+                    pstmtActualiza.setInt(1, idPrestamo);
+                    pstmtActualiza.executeUpdate();
                     conn.commit();
-                    System.out.println("  ✓ Pago registrado - Nuevo estado: " + nuevoEstado);
+                    System.out.println("✓ Pago completo registrado. Préstamo cancelado.");
                     return true;
                 } else {
-                    conn.rollback();
-                    return false;
+                    // Pago parcial - actualizar los valores restantes
+                    String sqlActualiza = "UPDATE PRESTAMO SET MONTO = ?, INTERES_GENERADO = ?, MULTA = ? WHERE ID_PRESTAMO = ?";
+                    pstmtActualiza = conn.prepareStatement(sqlActualiza);
+                    pstmtActualiza.setDouble(1, monto);
+                    pstmtActualiza.setDouble(2, interes);
+                    pstmtActualiza.setDouble(3, multa);
+                    pstmtActualiza.setInt(4, idPrestamo);
+                    pstmtActualiza.executeUpdate();
+                    conn.commit();
+                    System.out.println("✓ Pago parcial registrado: $" + montoPago);
+                    System.out.println("  Deuda restante: $" + (monto + interes + multa));
+                    return true;
                 }
             } else {
-                System.err.println("✗ ERROR: Préstamo no encontrado");
+                System.err.println("✗ No se encontró el préstamo");
                 conn.rollback();
                 return false;
             }
@@ -500,7 +564,6 @@ public class PrestamoDAO {
         } catch (SQLException e) {
             System.err.println("✗ Error al registrar pago");
             System.err.println("  Mensaje: " + e.getMessage());
-
             try {
                 if (conn != null) conn.rollback();
             } catch (SQLException ex) {
@@ -511,8 +574,8 @@ public class PrestamoDAO {
         } finally {
             try {
                 if (rs != null) rs.close();
-                if (pstmtCheck != null) pstmtCheck.close();
-                if (pstmtUpdate != null) pstmtUpdate.close();
+                if (pstmtConsulta != null) rs.close();
+                if (pstmtActualiza != null) pstmtActualiza.close();
                 if (conn != null) conn.setAutoCommit(true);
             } catch (SQLException e) {
                 System.err.println("  ✗ Error al cerrar recursos: " + e.getMessage());
@@ -521,49 +584,10 @@ public class PrestamoDAO {
     }
 
     /**
-     * Aplica multa manualmente a un préstamo en mora.
-     *
-     * @param idPrestamo ID del préstamo
-     * @return true si se aplicó la multa, false en caso contrario
-     */
-    public boolean aplicarMulta(int idPrestamo) {
-        Connection conn = null;
-        CallableStatement cstmt = null;
-
-        try {
-            conn = ConexionOracle.getConexion();
-            System.out.println("→ Aplicando multa a préstamo ID: " + idPrestamo);
-
-            // Cambiar estado a EN_MORA para que el trigger aplique la multa
-            String sql = "{CALL BEGIN UPDATE PRESTAMO SET ESTADO_PRESTAMO = 'EN_MORA' " +
-                        "WHERE ID_PRESTAMO = ? AND ESTADO_PRESTAMO != 'CANCELADO'; END;}";
-
-            cstmt = conn.prepareCall(sql);
-            cstmt.setInt(1, idPrestamo);
-            cstmt.execute();
-
-            System.out.println("✓ Multa aplicada exitosamente");
-            return true;
-
-        } catch (SQLException e) {
-            System.err.println("✗ Error al aplicar multa");
-            System.err.println("  Mensaje: " + e.getMessage());
-            return false;
-
-        } finally {
-            try {
-                if (cstmt != null) cstmt.close();
-            } catch (SQLException e) {
-                System.err.println("  ✗ Error al cerrar recursos: " + e.getMessage());
-            }
-        }
-    }
-
-    /**
-     * Cancela un préstamo (marca como CANCELADO).
+     * Cancela un préstamo cambiando su estado a CANCELADO.
      *
      * @param idPrestamo ID del préstamo a cancelar
-     * @return true si la cancelación fue exitosa, false en caso contrario
+     * @return true si se canceló correctamente, false en caso contrario
      */
     public boolean cancelarPrestamo(int idPrestamo) {
         Connection conn = null;
@@ -575,8 +599,7 @@ public class PrestamoDAO {
 
             conn.setAutoCommit(false);
 
-            String sql = "UPDATE PRESTAMO SET ESTADO_PRESTAMO = 'CANCELADO' " +
-                        "WHERE ID_PRESTAMO = ? AND ESTADO_PRESTAMO != 'CANCELADO'";
+            String sql = "UPDATE PRESTAMO SET ESTADO_PRESTAMO = 'CANCELADO' WHERE ID_PRESTAMO = ?";
 
             pstmt = conn.prepareStatement(sql);
             pstmt.setInt(1, idPrestamo);
@@ -589,14 +612,13 @@ public class PrestamoDAO {
                 return true;
             } else {
                 conn.rollback();
-                System.err.println("  ⚠ No se pudo cancelar el préstamo");
+                System.err.println("✗ No se encontró el préstamo");
                 return false;
             }
 
         } catch (SQLException e) {
             System.err.println("✗ Error al cancelar préstamo");
             System.err.println("  Mensaje: " + e.getMessage());
-
             try {
                 if (conn != null) conn.rollback();
             } catch (SQLException ex) {
@@ -615,56 +637,31 @@ public class PrestamoDAO {
     }
 
     /**
-     * Lista todos los préstamos del sistema.
+     * Obtiene el siguiente ID disponible para un nuevo préstamo.
      *
-     * @return lista completa de préstamos
+     * @return el siguiente ID disponible
      */
-    public List<Prestamo> listarTodosPrestamos() {
-        List<Prestamo> prestamos = new ArrayList<>();
+    public int obtenerSiguienteId() {
         Connection conn = null;
         Statement stmt = null;
         ResultSet rs = null;
+        int siguienteId = 1;
 
         try {
             conn = ConexionOracle.getConexion();
-            System.out.println("→ Listando todos los préstamos");
 
-            String sql = "SELECT ID_PRESTAMO, ID_ASESOR, ID_CLIENTE, ID_ARTICULO, " +
-                        "MONTO, INTERES_GENERADO, NVL(MULTA, 0) AS MULTA, " +
-                        "FECHA_PRESTAMO, FECHA_VENCIMIENTO, TASA_INTERES, ESTADO_PRESTAMO " +
-                        "FROM PRESTAMO ORDER BY FECHA_PRESTAMO DESC";
-
+            String sql = "SELECT NVL(MAX(ID_PRESTAMO), 0) + 1 AS SIGUIENTE_ID FROM PRESTAMO";
             stmt = conn.createStatement();
             rs = stmt.executeQuery(sql);
 
-            while (rs.next()) {
-                Prestamo prestamo = new Prestamo();
-                prestamo.setIdPrestamo(rs.getInt("ID_PRESTAMO"));
-                prestamo.setIdAsesor(rs.getInt("ID_ASESOR"));
-                prestamo.setIdCliente(rs.getInt("ID_CLIENTE"));
-                prestamo.setIdArticulo(rs.getInt("ID_ARTICULO"));
-                prestamo.setMonto(rs.getDouble("MONTO"));
-                prestamo.setInteresGenerado(rs.getDouble("INTERES_GENERADO"));
-                prestamo.setEstadoPrestamo(rs.getString("ESTADO_PRESTAMO"));
-                prestamo.setTasaInteres(rs.getDouble("TASA_INTERES"));
-
-                java.sql.Date fechaPrestamo = rs.getDate("FECHA_PRESTAMO");
-                if (fechaPrestamo != null) {
-                    prestamo.setFechaPrestamo(new java.util.Date(fechaPrestamo.getTime()));
-                }
-
-                java.sql.Date fechaVencimiento = rs.getDate("FECHA_VENCIMIENTO");
-                if (fechaVencimiento != null) {
-                    prestamo.setFechaVencimiento(new java.util.Date(fechaVencimiento.getTime()));
-                }
-
-                prestamos.add(prestamo);
+            if (rs.next()) {
+                siguienteId = rs.getInt("SIGUIENTE_ID");
             }
 
-            System.out.println("✓ Total de préstamos: " + prestamos.size());
+            System.out.println("→ Siguiente ID de préstamo disponible: " + siguienteId);
 
         } catch (SQLException e) {
-            System.err.println("✗ Error al listar préstamos");
+            System.err.println("✗ Error al obtener siguiente ID");
             System.err.println("  Mensaje: " + e.getMessage());
             e.printStackTrace();
 
@@ -677,6 +674,6 @@ public class PrestamoDAO {
             }
         }
 
-        return prestamos;
+        return siguienteId;
     }
 }

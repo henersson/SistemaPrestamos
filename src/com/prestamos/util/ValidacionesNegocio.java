@@ -2,14 +2,12 @@ package com.prestamos.util;
 
 import com.prestamos.modelo.Articulo;
 import com.prestamos.modelo.Cliente;
-import com.prestamos.config.ConexionOracle;
-import java.sql.*;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Clase utilitaria para centralizar todas las validaciones de negocio del sistema.
- * Implementa las reglas de negocio definidas en el universo del discurso.
+ * Clase utilitaria para centralizar todas las validaciones de negocio
+ * del sistema de casa de empeño.
  *
  * @author Sistema de Préstamos
  * @version 1.0
@@ -17,424 +15,199 @@ import java.util.concurrent.TimeUnit;
  */
 public class ValidacionesNegocio {
 
-    // Constantes de negocio
-    private static final double PORCENTAJE_MAXIMO_PRESTAMO = 0.80; // 80% del valor del artículo
-    private static final double CALIFICACION_MINIMA_CLIENTE = 3.0;
-    private static final int PLAZO_MAXIMO_MESES = 12;
-    private static final int DIAS_POR_MES = 30;
-
     /**
-     * Excepción personalizada para errores de validación de negocio.
-     */
-    public static class ValidacionNegocioException extends Exception {
-        public ValidacionNegocioException(String mensaje) {
-            super(mensaje);
-        }
-    }
-
-    /**
-     * Valida si un artículo puede ser usado para un préstamo.
+     * Valida que un artículo pueda ser usado como garantía en un préstamo.
      *
-     * Reglas:
-     * - No puede estar en estado DEFECTUOSO
-     * - Debe tener valor tasado mayor a 0
-     * - No debe estar ya en un préstamo activo
+     * Reglas de negocio:
+     * - El artículo no puede estar en estado DEFECTUOSO
+     * - El artículo debe tener un valor tasado mayor a 0
      *
-     * @param articulo artículo a validar
-     * @throws ValidacionNegocioException si la validación falla
+     * @param articulo el artículo a validar
+     * @return true si el artículo es válido, false en caso contrario
+     * @throws IllegalArgumentException si el artículo es null
      */
-    public static void validarArticuloParaPrestamo(Articulo articulo) throws ValidacionNegocioException {
+    public static boolean validarArticuloParaPrestamo(Articulo articulo) {
         if (articulo == null) {
-            throw new ValidacionNegocioException("El artículo no puede ser nulo");
+            throw new IllegalArgumentException("El artículo no puede ser null");
         }
 
-        // Validación 1: Estado no defectuoso
-        if ("DEFECTUOSO".equals(articulo.getEstado())) {
-            throw new ValidacionNegocioException(
-                "No se puede crear préstamo con artículo DEFECTUOSO. " +
-                "Los artículos defectuosos no son aceptados como garantía."
-            );
+        // Validar que no sea defectuoso
+        if ("DEFECTUOSO".equalsIgnoreCase(articulo.getEstado())) {
+            System.err.println("✗ VALIDACIÓN FALLIDA: Los artículos defectuosos no se aceptan como garantía");
+            return false;
         }
 
-        // Validación 2: Valor tasado mayor a 0
+        // Validar que tenga valor tasado
         if (articulo.getValorTasado() <= 0) {
-            throw new ValidacionNegocioException(
-                "El artículo debe tener un valor tasado mayor a $0.00. " +
-                "Valor actual: $" + String.format("%.2f", articulo.getValorTasado())
-            );
+            System.err.println("✗ VALIDACIÓN FALLIDA: El artículo debe tener un valor tasado mayor a 0");
+            return false;
         }
 
-        // Validación 3: No debe estar en préstamo activo
-        if (estaArticuloEnPrestamoActivo(articulo.getIdArticulo())) {
-            throw new ValidacionNegocioException(
-                "El artículo ID " + articulo.getIdArticulo() + " ya está en un préstamo activo. " +
-                "No se puede usar el mismo artículo para múltiples préstamos simultáneos."
-            );
-        }
-
-        System.out.println("✓ Artículo validado correctamente para préstamo");
+        System.out.println("✓ Artículo válido para préstamo");
+        return true;
     }
 
     /**
-     * Valida si el monto del préstamo es válido según el valor del artículo.
+     * Valida que el monto del préstamo no exceda el porcentaje permitido
+     * del valor del artículo (máximo 80%).
      *
-     * Regla: El monto no puede exceder el 80% del valor tasado del artículo.
-     *
-     * @param monto monto del préstamo solicitado
-     * @param valorArticulo valor tasado del artículo
-     * @throws ValidacionNegocioException si el monto excede el límite permitido
+     * @param montoPrestamo el monto solicitado del préstamo
+     * @param valorArticulo el valor tasado del artículo
+     * @return true si el monto es válido, false en caso contrario
      */
-    public static void validarMontoPrestamo(double monto, double valorArticulo) throws ValidacionNegocioException {
-        if (monto <= 0) {
-            throw new ValidacionNegocioException(
-                "El monto del préstamo debe ser mayor a $0.00"
-            );
+    public static boolean validarMontoPrestamo(double montoPrestamo, double valorArticulo) {
+        if (montoPrestamo <= 0) {
+            System.err.println("✗ VALIDACIÓN FALLIDA: El monto del préstamo debe ser mayor a 0");
+            return false;
         }
 
         if (valorArticulo <= 0) {
-            throw new ValidacionNegocioException(
-                "El valor del artículo debe ser mayor a $0.00"
-            );
+            System.err.println("✗ VALIDACIÓN FALLIDA: El valor del artículo debe ser mayor a 0");
+            return false;
         }
 
         double montoMaximo = calcularMontoMaximo(valorArticulo);
-
-        if (monto > montoMaximo) {
-            throw new ValidacionNegocioException(
-                String.format(
-                    "El monto del préstamo ($%.2f) excede el límite permitido.\n" +
-                    "Valor del artículo: $%.2f\n" +
-                    "Monto máximo permitido (80%%): $%.2f\n" +
-                    "Diferencia: $%.2f",
-                    monto, valorArticulo, montoMaximo, (monto - montoMaximo)
-                )
-            );
+        if (montoPrestamo > montoMaximo) {
+            System.err.println("✗ VALIDACIÓN FALLIDA: El monto del préstamo ($" + montoPrestamo +
+                             ") excede el máximo permitido ($" + montoMaximo + ")");
+            return false;
         }
 
-        // Advertencia si el monto es muy bajo
-        double montoPorcentaje = (monto / valorArticulo) * 100;
-        if (montoPorcentaje < 30) {
-            System.out.println("⚠ Advertencia: El monto solicitado es solo el " +
-                String.format("%.1f%%", montoPorcentaje) + " del valor del artículo");
-        }
-
-        System.out.println("✓ Monto del préstamo validado correctamente");
+        System.out.println("✓ Monto del préstamo válido");
+        return true;
     }
 
     /**
-     * Valida la calificación del cliente para otorgar un préstamo.
+     * Valida que la calificación del cliente sea suficiente para solicitar un préstamo.
+     * Se requiere una calificación mínima de 3.0
      *
-     * Regla: El cliente debe tener calificación >= 3.0 para ser elegible.
-     *
-     * @param cliente cliente a validar
-     * @throws ValidacionNegocioException si el cliente no cumple con la calificación mínima
+     * @param cliente el cliente a validar
+     * @return true si la calificación es suficiente, false en caso contrario
      */
-    public static void validarCalificacionCliente(Cliente cliente) throws ValidacionNegocioException {
+    public static boolean validarCalificacionCliente(Cliente cliente) {
         if (cliente == null) {
-            throw new ValidacionNegocioException("El cliente no puede ser nulo");
+            throw new IllegalArgumentException("El cliente no puede ser null");
         }
 
-        // Validar que el cliente esté activo
-        if (cliente.getActivo() != 'S') {
-            throw new ValidacionNegocioException(
-                "El cliente ID " + cliente.getIdCliente() + " está inactivo. " +
-                "No se pueden otorgar préstamos a clientes inactivos."
-            );
+        final double CALIFICACION_MINIMA = 3.0;
+
+        if (cliente.getCalificacion() < CALIFICACION_MINIMA) {
+            System.err.println("✗ VALIDACIÓN FALLIDA: El cliente requiere una calificación mínima de " +
+                             CALIFICACION_MINIMA + ". Calificación actual: " + cliente.getCalificacion());
+            return false;
         }
 
-        // Validar calificación mínima
-        double calificacion = cliente.getCalificacion();
-        if (calificacion < CALIFICACION_MINIMA_CLIENTE) {
-            throw new ValidacionNegocioException(
-                String.format(
-                    "El cliente no cumple con la calificación mínima requerida.\n" +
-                    "Calificación actual: %.2f\n" +
-                    "Calificación mínima: %.2f\n" +
-                    "El cliente debe mejorar su historial de pagos antes de solicitar un nuevo préstamo.",
-                    calificacion, CALIFICACION_MINIMA_CLIENTE
-                )
-            );
-        }
-
-        // Mensajes informativos según calificación
-        if (calificacion >= 8.0) {
-            System.out.println("✓ Cliente VIP - Calificación excelente: " + String.format("%.2f", calificacion));
-        } else if (calificacion >= 5.0) {
-            System.out.println("✓ Cliente con buena calificación: " + String.format("%.2f", calificacion));
-        } else {
-            System.out.println("⚠ Cliente con calificación mínima: " + String.format("%.2f", calificacion));
-        }
+        System.out.println("✓ Calificación del cliente suficiente: " + cliente.getCalificacion());
+        return true;
     }
 
     /**
-     * Valida las fechas de un préstamo.
+     * Valida que las fechas del préstamo sean coherentes.
      *
      * Reglas:
-     * - Fecha fin debe ser posterior a fecha inicio
-     * - Plazo máximo: 12 meses (360 días)
-     * - Fecha inicio no puede ser futura (más de 1 día adelante)
+     * - La fecha de vencimiento debe ser posterior a la fecha de inicio
+     * - El plazo máximo es de 12 meses (365 días)
      *
      * @param fechaInicio fecha de inicio del préstamo
-     * @param fechaFin fecha de vencimiento del préstamo
-     * @throws ValidacionNegocioException si las fechas no son válidas
+     * @param fechaVencimiento fecha de vencimiento del préstamo
+     * @return true si las fechas son válidas, false en caso contrario
      */
-    public static void validarFechasPrestamo(Date fechaInicio, Date fechaFin) throws ValidacionNegocioException {
-        if (fechaInicio == null || fechaFin == null) {
-            throw new ValidacionNegocioException("Las fechas del préstamo no pueden ser nulas");
+    public static boolean validarFechasPrestamo(Date fechaInicio, Date fechaVencimiento) {
+        if (fechaInicio == null || fechaVencimiento == null) {
+            System.err.println("✗ VALIDACIÓN FALLIDA: Las fechas no pueden ser null");
+            return false;
         }
 
-        // Validación 1: Fecha fin posterior a fecha inicio
-        if (!fechaFin.after(fechaInicio)) {
-            throw new ValidacionNegocioException(
-                "La fecha de vencimiento debe ser posterior a la fecha de inicio del préstamo"
-            );
+        // Validar que fecha vencimiento sea posterior a fecha inicio
+        if (!fechaVencimiento.after(fechaInicio)) {
+            System.err.println("✗ VALIDACIÓN FALLIDA: La fecha de vencimiento debe ser posterior a la fecha de inicio");
+            return false;
         }
 
-        // Validación 2: Fecha inicio no muy futura
-        Date hoy = new Date();
-        long diferenciaInicio = fechaInicio.getTime() - hoy.getTime();
-        long diasDiferenciaInicio = TimeUnit.MILLISECONDS.toDays(diferenciaInicio);
+        // Calcular días de diferencia
+        long diferenciaMilisegundos = fechaVencimiento.getTime() - fechaInicio.getTime();
+        long diasDiferencia = TimeUnit.MILLISECONDS.toDays(diferenciaMilisegundos);
 
-        if (diasDiferenciaInicio > 1) {
-            throw new ValidacionNegocioException(
-                "La fecha de inicio no puede ser más de 1 día en el futuro"
-            );
+        // Validar plazo máximo de 12 meses (365 días)
+        final long PLAZO_MAXIMO_DIAS = 365;
+        if (diasDiferencia > PLAZO_MAXIMO_DIAS) {
+            System.err.println("✗ VALIDACIÓN FALLIDA: El plazo máximo es de " + PLAZO_MAXIMO_DIAS +
+                             " días. Plazo solicitado: " + diasDiferencia + " días");
+            return false;
         }
 
-        // Validación 3: Plazo máximo
-        long diferenciaPlazo = fechaFin.getTime() - fechaInicio.getTime();
-        long diasPlazo = TimeUnit.MILLISECONDS.toDays(diferenciaPlazo);
-        int plazoMaximoDias = PLAZO_MAXIMO_MESES * DIAS_POR_MES;
-
-        if (diasPlazo > plazoMaximoDias) {
-            throw new ValidacionNegocioException(
-                String.format(
-                    "El plazo del préstamo excede el máximo permitido.\n" +
-                    "Plazo solicitado: %d días (%.1f meses)\n" +
-                    "Plazo máximo: %d días (%d meses)",
-                    diasPlazo, diasPlazo / 30.0, plazoMaximoDias, PLAZO_MAXIMO_MESES
-                )
-            );
-        }
-
-        // Advertencia para plazos muy cortos
-        if (diasPlazo < 7) {
-            System.out.println("⚠ Advertencia: Plazo muy corto (" + diasPlazo + " días)");
-        }
-
-        System.out.println("✓ Fechas del préstamo validadas correctamente (plazo: " + diasPlazo + " días)");
+        System.out.println("✓ Fechas del préstamo válidas. Plazo: " + diasDiferencia + " días");
+        return true;
     }
 
     /**
-     * Calcula el monto máximo que se puede prestar sobre un artículo.
-     *
-     * Regla: Máximo 80% del valor tasado del artículo.
+     * Calcula el monto máximo que se puede prestar basado en el valor del artículo.
+     * El monto máximo es el 80% del valor tasado.
      *
      * @param valorArticulo valor tasado del artículo
-     * @return monto máximo permitido
+     * @return el monto máximo permitido para el préstamo
      */
     public static double calcularMontoMaximo(double valorArticulo) {
-        if (valorArticulo <= 0) {
-            return 0;
-        }
-        return valorArticulo * PORCENTAJE_MAXIMO_PRESTAMO;
+        final double PORCENTAJE_MAXIMO = 0.80; // 80%
+        return valorArticulo * PORCENTAJE_MAXIMO;
     }
 
     /**
-     * Calcula el monto máximo recomendado (estrategia conservadora).
+     * Calcula la tasa de interés según el plazo del préstamo.
      *
-     * @param articulo artículo en garantía
-     * @return monto recomendado (70% del valor tasado)
-     */
-    public static double calcularMontoRecomendado(Articulo articulo) {
-        if (articulo == null || articulo.getValorTasado() <= 0) {
-            return 0;
-        }
-
-        double montoRecomendado = articulo.getValorTasado() * 0.70; // 70% conservador
-
-        // Ajustar según estado del artículo
-        String estado = articulo.getEstado();
-        if ("OPTIMO".equals(estado)) {
-            montoRecomendado = articulo.getValorTasado() * 0.75; // 75% para óptimos
-        } else if ("FUNCIONABLE".equals(estado)) {
-            montoRecomendado = articulo.getValorTasado() * 0.65; // 65% para funcionables
-        }
-
-        return montoRecomendado;
-    }
-
-    /**
-     * Valida que un cliente no tenga demasiados préstamos activos.
+     * Reglas:
+     * - Menos de 3 meses (90 días) → 5%
+     * - Entre 3 y 6 meses (90-180 días) → 10%
+     * - Más de 6 meses (más de 180 días) → 15%
      *
-     * @param idCliente ID del cliente
-     * @param limiteMaximo límite máximo de préstamos simultáneos (default: 5)
-     * @throws ValidacionNegocioException si excede el límite
+     * @param fechaInicio fecha de inicio del préstamo
+     * @param fechaVencimiento fecha de vencimiento del préstamo
+     * @return la tasa de interés aplicable
      */
-    public static void validarLimitePrestamosActivos(int idCliente, int limiteMaximo)
-            throws ValidacionNegocioException {
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
+    public static double calcularTasaInteres(Date fechaInicio, Date fechaVencimiento) {
+        long diferenciaMilisegundos = fechaVencimiento.getTime() - fechaInicio.getTime();
+        long diasDiferencia = TimeUnit.MILLISECONDS.toDays(diferenciaMilisegundos);
 
-        try {
-            conn = ConexionOracle.getConexion();
-
-            String sql =
-                "SELECT COUNT(*) AS TOTAL " +
-                "FROM PRESTAMO " +
-                "WHERE ID_CLIENTE = ? AND ESTADO_PRESTAMO IN ('ACTIVO', 'EN_MORA')";
-
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setInt(1, idCliente);
-            rs = pstmt.executeQuery();
-
-            if (rs.next()) {
-                int prestamosActivos = rs.getInt("TOTAL");
-
-                if (prestamosActivos >= limiteMaximo) {
-                    throw new ValidacionNegocioException(
-                        String.format(
-                            "El cliente ya tiene %d préstamo(s) activo(s).\n" +
-                            "Límite máximo permitido: %d\n" +
-                            "Debe cancelar préstamos existentes antes de solicitar uno nuevo.",
-                            prestamosActivos, limiteMaximo
-                        )
-                    );
-                }
-
-                if (prestamosActivos > 0) {
-                    System.out.println("ℹ Cliente tiene " + prestamosActivos + " préstamo(s) activo(s)");
-                }
-            }
-
-        } catch (SQLException e) {
-            System.err.println("Error al validar límite de préstamos: " + e.getMessage());
-            // No lanzar excepción para no bloquear el proceso
-        } finally {
-            cerrarRecursos(rs, pstmt);
+        if (diasDiferencia < 90) {
+            return 0.05; // 5%
+        } else if (diasDiferencia <= 180) {
+            return 0.10; // 10%
+        } else {
+            return 0.15; // 15%
         }
     }
 
     /**
-     * Valida una tasa de interés.
+     * Calcula el interés generado por un préstamo.
      *
-     * @param tasaInteres tasa de interés anual (porcentaje)
-     * @throws ValidacionNegocioException si la tasa no es válida
+     * @param monto monto del préstamo
+     * @param tasaInteres tasa de interés (ejemplo: 0.05 para 5%)
+     * @return el monto del interés generado
      */
-    public static void validarTasaInteres(double tasaInteres) throws ValidacionNegocioException {
-        if (tasaInteres < 0) {
-            throw new ValidacionNegocioException("La tasa de interés no puede ser negativa");
-        }
-
-        if (tasaInteres > 100) {
-            throw new ValidacionNegocioException(
-                "La tasa de interés (" + tasaInteres + "%) es excesivamente alta"
-            );
-        }
-
-        // Advertencia para tasas inusuales
-        if (tasaInteres < 1) {
-            System.out.println("⚠ Advertencia: Tasa de interés muy baja (" + tasaInteres + "%)");
-        } else if (tasaInteres > 50) {
-            System.out.println("⚠ Advertencia: Tasa de interés muy alta (" + tasaInteres + "%)");
-        }
-    }
-
-    // ==================== MÉTODOS AUXILIARES ====================
-
-    /**
-     * Verifica si un artículo está en un préstamo activo.
-     */
-    private static boolean estaArticuloEnPrestamoActivo(int idArticulo) {
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = ConexionOracle.getConexion();
-
-            String sql =
-                "SELECT COUNT(*) AS TOTAL " +
-                "FROM PRESTAMO " +
-                "WHERE ID_ARTICULO = ? AND ESTADO_PRESTAMO IN ('ACTIVO', 'EN_MORA')";
-
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setInt(1, idArticulo);
-            rs = pstmt.executeQuery();
-
-            if (rs.next()) {
-                return rs.getInt("TOTAL") > 0;
-            }
-
-        } catch (SQLException e) {
-            System.err.println("Error al verificar artículo en préstamo: " + e.getMessage());
-        } finally {
-            cerrarRecursos(rs, pstmt);
-        }
-
-        return false;
+    public static double calcularInteresGenerado(double monto, double tasaInteres) {
+        return monto * tasaInteres;
     }
 
     /**
-     * Cierra recursos de base de datos de forma segura.
+     * Calcula la multa por mora (2% adicional sobre el saldo).
+     *
+     * @param saldoPendiente saldo pendiente del préstamo
+     * @return el monto de la multa
      */
-    private static void cerrarRecursos(ResultSet rs, PreparedStatement pstmt) {
-        try {
-            if (rs != null) rs.close();
-            if (pstmt != null) pstmt.close();
-        } catch (SQLException e) {
-            System.err.println("Error al cerrar recursos: " + e.getMessage());
-        }
-    }
-
-    // ==================== MÉTODOS DE INFORMACIÓN ====================
-
-    /**
-     * Obtiene información de resumen sobre las validaciones disponibles.
-     */
-    public static String obtenerResumenValidaciones() {
-        StringBuilder resumen = new StringBuilder();
-        resumen.append("═══════════════════════════════════════════════════════════\n");
-        resumen.append("        REGLAS DE NEGOCIO DEL SISTEMA DE PRÉSTAMOS\n");
-        resumen.append("═══════════════════════════════════════════════════════════\n\n");
-        resumen.append("1. ARTÍCULOS:\n");
-        resumen.append("   • No se aceptan artículos DEFECTUOSOS\n");
-        resumen.append("   • Valor tasado debe ser > $0.00\n");
-        resumen.append("   • No puede estar en préstamo activo\n\n");
-        resumen.append("2. MONTOS DE PRÉSTAMO:\n");
-        resumen.append("   • Máximo: 80% del valor tasado del artículo\n");
-        resumen.append("   • Recomendado: 70% (conservador)\n");
-        resumen.append("   • Óptimos: hasta 75%\n");
-        resumen.append("   • Funcionables: hasta 65%\n\n");
-        resumen.append("3. CLIENTES:\n");
-        resumen.append("   • Calificación mínima: 3.0\n");
-        resumen.append("   • Debe estar activo en el sistema\n");
-        resumen.append("   • Límite de préstamos simultáneos: 5\n\n");
-        resumen.append("4. PLAZOS:\n");
-        resumen.append("   • Plazo máximo: 12 meses (360 días)\n");
-        resumen.append("   • Plazo mínimo recomendado: 7 días\n");
-        resumen.append("   • Fecha inicio: máximo 1 día futuro\n\n");
-        resumen.append("5. TASAS DE INTERÉS:\n");
-        resumen.append("   • Rango válido: 0% - 100%\n");
-        resumen.append("   • Típica: 3% - 10% anual\n\n");
-        resumen.append("═══════════════════════════════════════════════════════════\n");
-
-        return resumen.toString();
+    public static double calcularMultaPorMora(double saldoPendiente) {
+        final double PORCENTAJE_MULTA = 0.02; // 2%
+        return saldoPendiente * PORCENTAJE_MULTA;
     }
 
     /**
-     * Obtiene las constantes de negocio.
+     * Calcula el total a pagar de un préstamo (monto + interés + multa).
+     *
+     * @param monto monto principal del préstamo
+     * @param interes interés generado
+     * @param multa multa aplicada
+     * @return el total a pagar
      */
-    public static String obtenerConstantesNegocio() {
-        return String.format(
-            "Porcentaje máximo préstamo: %.0f%%\n" +
-            "Calificación mínima cliente: %.1f\n" +
-            "Plazo máximo: %d meses\n",
-            PORCENTAJE_MAXIMO_PRESTAMO * 100,
-            CALIFICACION_MINIMA_CLIENTE,
-            PLAZO_MAXIMO_MESES
-        );
+    public static double calcularTotalAPagar(double monto, double interes, double multa) {
+        return monto + interes + multa;
     }
 }
-

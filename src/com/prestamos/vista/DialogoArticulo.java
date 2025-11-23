@@ -18,18 +18,22 @@ public class DialogoArticulo extends JDialog {
 
     // Componentes
     private JTextField txtId;
+    private JTextField txtNombreArticulo; // Nuevo campo para el nombre del artículo
+    private JTextField txtIdCliente;
+    private JTextField txtNombre;
+    private JButton btnBuscarCliente;
     private JComboBox<String> cmbTipo;
     private JTextArea txtDescripcion;
     private JComboBox<String> cmbEstado;
     private JTextField txtValorTasado;
     private JTextField txtPrecioMercado;
     private JTextField txtPorcentajeTasacion;
-    private JSpinner dateAvaluo;
     private JButton btnGuardar;
     private JButton btnCancelar;
 
     // DAO
     private final ArticuloDAO articuloDAO = new ArticuloDAO();
+    private final com.prestamos.dao.ClienteDAO clienteDAO = new com.prestamos.dao.ClienteDAO();
 
     // Control
     private boolean confirmado = false;
@@ -73,7 +77,7 @@ public class DialogoArticulo extends JDialog {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(8, 5, 8, 5);
 
-        // Fila 0: ID
+        // Fila 0: ID Artículo
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.weightx = 0.3;
@@ -87,24 +91,37 @@ public class DialogoArticulo extends JDialog {
         txtId.setEnabled(esNuevo);
         panelFormulario.add(txtId, gbc);
 
-        // Fila 1: Tipo
+        // Fila 1: Nombre Artículo
         gbc.gridx = 0;
         gbc.gridy = 1;
+        gbc.weightx = 0.3;
+        panelFormulario.add(crearLabel("*Nombre Artículo:"), gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.7;
+        txtNombreArticulo = new JTextField();
+        txtNombreArticulo.setFont(new Font("Arial", Font.PLAIN, 14));
+        txtNombreArticulo.setPreferredSize(new Dimension(0, 35));
+        panelFormulario.add(txtNombreArticulo, gbc);
+
+        // Fila 2: Tipo (ajustar el índice de las filas siguientes)
+        gbc.gridx = 0;
+        gbc.gridy = 2;
         gbc.weightx = 0.3;
         panelFormulario.add(crearLabel("*Tipo:"), gbc);
 
         gbc.gridx = 1;
         gbc.weightx = 0.7;
         cmbTipo = new JComboBox<>(new String[]{
-            "ELECTRODOMESTICO", "JOYA", "HERRAMIENTA", "VEHICULO", "ELECTRONICO", "OTRO"
+            "ELECTRONICO", "VEHICULO", "INMUEBLE", "JOYA", "INSTRUMENTO", "OTRO"
         });
         cmbTipo.setFont(new Font("Arial", Font.PLAIN, 14));
         cmbTipo.setPreferredSize(new Dimension(0, 35));
         panelFormulario.add(cmbTipo, gbc);
 
-        // Fila 2: Descripción
+        // Fila 3: Descripción
         gbc.gridx = 0;
-        gbc.gridy = 2;
+        gbc.gridy = 3;
         gbc.weightx = 0.3;
         panelFormulario.add(crearLabel("*Descripción:"), gbc);
 
@@ -122,24 +139,24 @@ public class DialogoArticulo extends JDialog {
         scrollDescripcion.setPreferredSize(new Dimension(0, 80));
         panelFormulario.add(scrollDescripcion, gbc);
 
-        // Fila 3: Estado
+        // Fila 4: Estado (solo valores válidos según la BD)
         gbc.gridx = 0;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
         gbc.weightx = 0.3;
         panelFormulario.add(crearLabel("*Estado:"), gbc);
 
         gbc.gridx = 1;
         gbc.weightx = 0.7;
         cmbEstado = new JComboBox<>(new String[]{
-            "OPTIMO", "FUNCIONABLE", "DEFECTUOSO", "PROPIEDAD_CASA"
+            "DISPONIBLE", "EMPEÑADO", "VENDIDO", "RETIRADO"
         });
         cmbEstado.setFont(new Font("Arial", Font.PLAIN, 14));
         cmbEstado.setPreferredSize(new Dimension(0, 35));
         panelFormulario.add(cmbEstado, gbc);
 
-        // Fila 4: Precio Mercado
+        // Fila 5: Precio Mercado
         gbc.gridx = 0;
-        gbc.gridy = 4;
+        gbc.gridy = 5;
         gbc.weightx = 0.3;
         panelFormulario.add(crearLabel("*Precio Mercado:"), gbc);
 
@@ -150,9 +167,9 @@ public class DialogoArticulo extends JDialog {
         txtPrecioMercado.setPreferredSize(new Dimension(0, 35));
         panelFormulario.add(txtPrecioMercado, gbc);
 
-        // Fila 5: Porcentaje Tasación
+        // Fila 6: Porcentaje Tasación
         gbc.gridx = 0;
-        gbc.gridy = 5;
+        gbc.gridy = 6;
         gbc.weightx = 0.3;
         panelFormulario.add(crearLabel("*% Tasación:"), gbc);
 
@@ -163,9 +180,9 @@ public class DialogoArticulo extends JDialog {
         txtPorcentajeTasacion.setPreferredSize(new Dimension(0, 35));
         panelFormulario.add(txtPorcentajeTasacion, gbc);
 
-        // Fila 6: Valor Tasado (calculado)
+        // Fila 7: Valor Tasado (calculado)
         gbc.gridx = 0;
-        gbc.gridy = 6;
+        gbc.gridy = 7;
         gbc.weightx = 0.3;
         panelFormulario.add(crearLabel("Valor Tasado:"), gbc);
 
@@ -178,22 +195,53 @@ public class DialogoArticulo extends JDialog {
         txtValorTasado.setBackground(new Color(236, 240, 241));
         panelFormulario.add(txtValorTasado, gbc);
 
-        // Fila 7: Fecha Avalúo
+        // Fila 8: ID Cliente
         gbc.gridx = 0;
-        gbc.gridy = 7;
+        gbc.gridy = 8;
         gbc.weightx = 0.3;
-        panelFormulario.add(crearLabel("*Fecha Avalúo:"), gbc);
+        panelFormulario.add(crearLabel("*ID Cliente:"), gbc);
 
         gbc.gridx = 1;
         gbc.weightx = 0.7;
-        SpinnerDateModel dateModel = new SpinnerDateModel();
-        dateAvaluo = new JSpinner(dateModel);
-        JSpinner.DateEditor dateEditor = new JSpinner.DateEditor(dateAvaluo, "dd/MM/yyyy");
-        dateAvaluo.setEditor(dateEditor);
-        dateAvaluo.setFont(new Font("Arial", Font.PLAIN, 14));
-        dateAvaluo.setPreferredSize(new Dimension(0, 35));
-        dateAvaluo.setValue(new Date());
-        panelFormulario.add(dateAvaluo, gbc);
+        txtIdCliente = new JTextField();
+        txtIdCliente.setFont(new Font("Arial", Font.PLAIN, 14));
+        txtIdCliente.setPreferredSize(new Dimension(0, 35));
+        panelFormulario.add(txtIdCliente, gbc);
+
+        // Fila 9: Nombre (opcional - solo para referencia)
+        gbc.gridx = 0;
+        gbc.gridy = 9;
+        gbc.weightx = 0.3;
+        panelFormulario.add(crearLabel("Nombre Cliente:"), gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.7;
+        txtNombre = new JTextField();
+        txtNombre.setFont(new Font("Arial", Font.PLAIN, 14));
+        txtNombre.setPreferredSize(new Dimension(0, 35));
+        txtNombre.setEditable(false);
+        txtNombre.setBackground(new Color(236, 240, 241));
+        txtNombre.setToolTipText("Campo informativo - se obtiene automáticamente de la base de datos");
+        panelFormulario.add(txtNombre, gbc);
+
+        // Fila 10: Botón Buscar Cliente
+        gbc.gridx = 0;
+        gbc.gridy = 10;
+        gbc.weightx = 0.3;
+        panelFormulario.add(crearLabel(""), gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 0.7;
+        btnBuscarCliente = new JButton("Buscar Cliente");
+        btnBuscarCliente.setFont(new Font("Arial", Font.BOLD, 14));
+        btnBuscarCliente.setBackground(new Color(52, 152, 219));
+        btnBuscarCliente.setForeground(Color.WHITE);
+        btnBuscarCliente.setFocusPainted(false);
+        btnBuscarCliente.setBorderPainted(false);
+        btnBuscarCliente.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnBuscarCliente.setPreferredSize(new Dimension(150, 35));
+        btnBuscarCliente.addActionListener(e -> buscarCliente());
+        panelFormulario.add(btnBuscarCliente, gbc);
 
         // Agregar listener para calcular valor tasado automáticamente
         txtPrecioMercado.addKeyListener(new java.awt.event.KeyAdapter() {
@@ -279,16 +327,15 @@ public class DialogoArticulo extends JDialog {
     private void cargarDatosArticulo() {
         if (articulo != null) {
             txtId.setText(String.valueOf(articulo.getIdArticulo()));
+            txtNombreArticulo.setText(articulo.getNombre()); // Usar getNombre()
             cmbTipo.setSelectedItem(articulo.getTipoArticulo());
             txtDescripcion.setText(articulo.getDescripcion());
             cmbEstado.setSelectedItem(articulo.getEstado());
             txtPrecioMercado.setText(String.valueOf(articulo.getPrecioMercadoBase()));
             txtPorcentajeTasacion.setText(String.valueOf(articulo.getPorcentajeTasacion()));
             txtValorTasado.setText(String.format("$%.2f", articulo.getValorTasado()));
-
-            if (articulo.getFechaAvaluo() != null) {
-                dateAvaluo.setValue(articulo.getFechaAvaluo());
-            }
+            txtIdCliente.setText(String.valueOf(articulo.getIdCliente()));
+            txtNombre.setText(articulo.getNombreCliente());
         }
     }
 
@@ -308,17 +355,18 @@ public class DialogoArticulo extends JDialog {
                 articulo.setIdArticulo(Integer.parseInt(txtId.getText().trim()));
             }
 
+            articulo.setNombre(txtNombreArticulo.getText().trim()); // Usar setNombre()
             articulo.setTipoArticulo((String) cmbTipo.getSelectedItem());
             articulo.setDescripcion(txtDescripcion.getText().trim());
             articulo.setEstado((String) cmbEstado.getSelectedItem());
             articulo.setPrecioMercadoBase(Double.parseDouble(txtPrecioMercado.getText().trim()));
             articulo.setPorcentajeTasacion(Double.parseDouble(txtPorcentajeTasacion.getText().trim()));
+            articulo.setIdCliente(Integer.parseInt(txtIdCliente.getText().trim()));
+            articulo.setNombreCliente(txtNombre.getText().trim());
 
             // Calcular valor tasado
             double valorTasado = articulo.getPrecioMercadoBase() * (articulo.getPorcentajeTasacion() / 100.0);
             articulo.setValorTasado(valorTasado);
-
-            articulo.setFechaAvaluo((Date) dateAvaluo.getValue());
 
             // Validación: No permitir artículos defectuosos en inserción
             if (esNuevo && "DEFECTUOSO".equals(articulo.getEstado())) {
@@ -377,7 +425,6 @@ public class DialogoArticulo extends JDialog {
             txtId.requestFocus();
             return false;
         }
-
         try {
             if (esNuevo) {
                 int id = Integer.parseInt(txtId.getText().trim());
@@ -392,21 +439,24 @@ public class DialogoArticulo extends JDialog {
             txtId.requestFocus();
             return false;
         }
-
+        // Validar nombre del artículo
+        if (txtNombreArticulo.getText().trim().isEmpty()) {
+            mostrarMensajeError("El nombre del artículo es obligatorio.");
+            txtNombreArticulo.requestFocus();
+            return false;
+        }
         // Validar descripción
         if (txtDescripcion.getText().trim().isEmpty()) {
             mostrarMensajeError("La descripción es obligatoria.");
             txtDescripcion.requestFocus();
             return false;
         }
-
         // Validar precio mercado
         if (txtPrecioMercado.getText().trim().isEmpty()) {
             mostrarMensajeError("El precio de mercado es obligatorio.");
             txtPrecioMercado.requestFocus();
             return false;
         }
-
         try {
             double precio = Double.parseDouble(txtPrecioMercado.getText().trim());
             if (precio <= 0) {
@@ -419,14 +469,12 @@ public class DialogoArticulo extends JDialog {
             txtPrecioMercado.requestFocus();
             return false;
         }
-
         // Validar porcentaje tasación
         if (txtPorcentajeTasacion.getText().trim().isEmpty()) {
             mostrarMensajeError("El porcentaje de tasación es obligatorio.");
             txtPorcentajeTasacion.requestFocus();
             return false;
         }
-
         try {
             double porcentaje = Double.parseDouble(txtPorcentajeTasacion.getText().trim());
             if (porcentaje <= 0 || porcentaje > 100) {
@@ -439,13 +487,31 @@ public class DialogoArticulo extends JDialog {
             txtPorcentajeTasacion.requestFocus();
             return false;
         }
-
-        // Validar fecha
-        if (dateAvaluo.getValue() == null) {
-            mostrarMensajeError("La fecha de avalúo es obligatoria.");
+        // Validar ID Cliente
+        if (txtIdCliente.getText().trim().isEmpty()) {
+            mostrarMensajeError("El ID del cliente es obligatorio.");
+            txtIdCliente.requestFocus();
             return false;
         }
-
+        int idCliente;
+        try {
+            idCliente = Integer.parseInt(txtIdCliente.getText().trim());
+            if (idCliente <= 0) {
+                mostrarMensajeError("El ID del cliente debe ser un número positivo.");
+                txtIdCliente.requestFocus();
+                return false;
+            }
+        } catch (NumberFormatException e) {
+            mostrarMensajeError("El ID del cliente debe ser un número válido.");
+            txtIdCliente.requestFocus();
+            return false;
+        }
+        // Validar existencia del cliente en la BD
+        if (clienteDAO.obtenerClientePorId(idCliente) == null) {
+            mostrarMensajeError("El ID del cliente no existe en la base de datos. Debe ser un ID válido de CLIENTE (ID_PERSONA).");
+            txtIdCliente.requestFocus();
+            return false;
+        }
         return true;
     }
 
@@ -466,5 +532,61 @@ public class DialogoArticulo extends JDialog {
      */
     public boolean isConfirmado() {
         return confirmado;
+    }
+
+    /**
+     * Busca y carga los datos del cliente en el formulario.
+     */
+    private void buscarCliente() {
+        try {
+            // Obtener lista de clientes
+            java.util.List<com.prestamos.modelo.Cliente> clientes = clienteDAO.listarTodosClientes();
+
+            if (clientes.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                    "No hay clientes registrados en el sistema.",
+                    "Sin Clientes",
+                    JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+
+            // Crear lista para mostrar en el diálogo (ID_PERSONA)
+            String[] opcionesClientes = new String[clientes.size()];
+            for (int i = 0; i < clientes.size(); i++) {
+                com.prestamos.modelo.Cliente cliente = clientes.get(i);
+                opcionesClientes[i] = String.format("ID: %d - %s (Calificación: %.2f)",
+                    cliente.getIdPersona(), // Usar ID_PERSONA
+                    cliente.getNombrePersona(),
+                    cliente.getCalificacion());
+            }
+
+            // Mostrar diálogo de selección
+            String seleccion = (String) JOptionPane.showInputDialog(
+                this,
+                "Seleccione un cliente:",
+                "Buscar Cliente",
+                JOptionPane.QUESTION_MESSAGE,
+                null,
+                opcionesClientes,
+                opcionesClientes[0]
+            );
+
+            // Si seleccionó algo, llenar los campos
+            if (seleccion != null) {
+                int idx = java.util.Arrays.asList(opcionesClientes).indexOf(seleccion);
+                com.prestamos.modelo.Cliente clienteSeleccionado = clientes.get(idx);
+                txtIdCliente.setText(String.valueOf(clienteSeleccionado.getIdPersona())); // Usar ID_PERSONA
+                txtNombre.setText(clienteSeleccionado.getNombrePersona());
+                txtNombre.setEditable(false); // Bloquear edición del nombre
+            }
+
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this,
+                "Error al buscar clientes: " + e.getMessage(),
+                "Error",
+                JOptionPane.ERROR_MESSAGE);
+            System.err.println("Error al buscar cliente: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }

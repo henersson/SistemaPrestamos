@@ -42,9 +42,15 @@ public class PanelArticulos extends JPanel {
      * Constructor del panel de artículos.
      */
     public PanelArticulos() {
-        initComponents();
-        cargarDatosTabla();
-        configurarEventos();
+        try {
+            // Restaurar la interfaz real de gestión de artículos
+            initComponents();
+            cargarDatosTabla();
+            configurarEventos();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error en PanelArticulos: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /**
@@ -140,7 +146,7 @@ public class PanelArticulos extends JPanel {
         // Crear modelo de tabla
         String[] columnas = {
             "ID", "Tipo", "Descripción", "Estado", "Valor Tasado",
-            "Fecha Avalúo", "% Tasación", "Precio Mercado"
+            "% Tasación", "Precio Mercado"
         };
         modeloTabla = new DefaultTableModel(columnas, 0) {
             @Override
@@ -162,9 +168,8 @@ public class PanelArticulos extends JPanel {
         tblArticulos.getColumnModel().getColumn(2).setPreferredWidth(250); // Descripción
         tblArticulos.getColumnModel().getColumn(3).setPreferredWidth(100); // Estado
         tblArticulos.getColumnModel().getColumn(4).setPreferredWidth(100); // Valor
-        tblArticulos.getColumnModel().getColumn(5).setPreferredWidth(100); // Fecha
-        tblArticulos.getColumnModel().getColumn(6).setPreferredWidth(80);  // %
-        tblArticulos.getColumnModel().getColumn(7).setPreferredWidth(100); // Precio
+        tblArticulos.getColumnModel().getColumn(5).setPreferredWidth(80);  // %
+        tblArticulos.getColumnModel().getColumn(6).setPreferredWidth(100); // Precio
 
         // Renderizador personalizado para estados con colores
         DefaultTableCellRenderer rendererEstado = new DefaultTableCellRenderer() {
@@ -210,12 +215,11 @@ public class PanelArticulos extends JPanel {
         tblArticulos.getColumnModel().getColumn(4).setCellRenderer(centerRenderer);
         tblArticulos.getColumnModel().getColumn(5).setCellRenderer(centerRenderer);
         tblArticulos.getColumnModel().getColumn(6).setCellRenderer(centerRenderer);
-        tblArticulos.getColumnModel().getColumn(7).setCellRenderer(centerRenderer);
 
-        // Estilo del encabezado
+        // Estilo del encabezado - COLOR NEGRO
         tblArticulos.getTableHeader().setFont(new Font("Arial", Font.BOLD, 13));
         tblArticulos.getTableHeader().setBackground(new Color(52, 73, 94));
-        tblArticulos.getTableHeader().setForeground(Color.WHITE);
+        tblArticulos.getTableHeader().setForeground(Color.BLACK);
         tblArticulos.getTableHeader().setPreferredSize(new Dimension(0, 35));
 
         JScrollPane scrollPane = new JScrollPane(tblArticulos);
@@ -317,7 +321,6 @@ public class PanelArticulos extends JPanel {
                 articulo.getDescripcion(),
                 articulo.getEstado(),
                 String.format("$%.2f", articulo.getValorTasado()),
-                articulo.getFechaAvaluo() != null ? sdf.format(articulo.getFechaAvaluo()) : "N/A",
                 String.format("%.1f%%", articulo.getPorcentajeTasacion()),
                 String.format("$%.2f", articulo.getPrecioMercadoBase())
             };
@@ -353,7 +356,6 @@ public class PanelArticulos extends JPanel {
                     articulo.getDescripcion(),
                     articulo.getEstado(),
                     String.format("$%.2f", articulo.getValorTasado()),
-                    articulo.getFechaAvaluo() != null ? sdf.format(articulo.getFechaAvaluo()) : "N/A",
                     String.format("%.1f%%", articulo.getPorcentajeTasacion()),
                     String.format("$%.2f", articulo.getPrecioMercadoBase())
                 };
@@ -387,7 +389,6 @@ public class PanelArticulos extends JPanel {
                     articulo.getDescripcion(),
                     articulo.getEstado(),
                     String.format("$%.2f", articulo.getValorTasado()),
-                    articulo.getFechaAvaluo() != null ? sdf.format(articulo.getFechaAvaluo()) : "N/A",
                     String.format("%.1f%%", articulo.getPorcentajeTasacion()),
                     String.format("$%.2f", articulo.getPrecioMercadoBase())
                 };
@@ -481,4 +482,3 @@ public class PanelArticulos extends JPanel {
         }
     }
 }
-

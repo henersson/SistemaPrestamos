@@ -9,8 +9,8 @@ import com.prestamos.config.ConexionOracle;
  * Clase DAO (Data Access Object) para gestionar operaciones CRUD de Artículo.
  * Implementa todas las operaciones de acceso a datos para la entidad Artículo.
  *
- * @author Henersson Cobo
- * @version 1.0
+ * @author Sistema de Préstamos
+ * @version 2.0
  * @since 2025-11-23
  */
 public class ArticuloDAO {
@@ -28,34 +28,35 @@ public class ArticuloDAO {
 
         try {
             // VALIDACIÓN: No permitir insertar artículos defectuosos
-            if (articulo.getEstado() != null && articulo.getEstado().equals("DEFECTUOSO")) {
+            if (articulo.getEstado() != null && articulo.getEstado().equalsIgnoreCase("DEFECTUOSO")) {
                 System.err.println("✗ ERROR: No se pueden registrar artículos defectuosos");
                 return false;
             }
 
             conn = ConexionOracle.getConexion();
-            System.out.println("→ Iniciando inserción de artículo: " + articulo.getNombre());
+            System.out.println("→ Iniciando inserción de artículo ID: " + articulo.getIdArticulo());
 
             conn.setAutoCommit(false);
 
-            String sql = "INSERT INTO ARTICULO (ID_ARTICULO, TIPO_ARTICULO, DESCRIPCION_ARTICULO, " +
-                        "VALOR_TASADO, ESTADO, PRECIO_MERCADO_BASE, PORCENTAJE_TASACION, FECHA_AVALUO) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+            // Esquema completo: ID_ARTICULO, ID_CLIENTE, NOMBRE, TIPO_ARTICULO, ESTADO, VALOR_TASADO, DESCRIPCION
+            String sql = "INSERT INTO ARTICULO (ID_ARTICULO, ID_CLIENTE, NOMBRE, TIPO_ARTICULO, ESTADO, VALOR_TASADO, DESCRIPCION) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)";
 
             pstmt = conn.prepareStatement(sql);
             pstmt.setInt(1, articulo.getIdArticulo());
-            pstmt.setString(2, articulo.getTipoArticulo());
-            pstmt.setString(3, articulo.getDescripcion());
-            pstmt.setDouble(4, articulo.getValorTasado());
+            pstmt.setInt(2, articulo.getIdCliente());
+            pstmt.setString(3, articulo.getNombre()); // Guardar el nombre real del artículo
+            pstmt.setString(4, articulo.getTipoArticulo());
             pstmt.setString(5, articulo.getEstado());
-            pstmt.setDouble(6, articulo.getPrecioMercadoBase());
-            pstmt.setDouble(7, articulo.getPorcentajeTasacion());
+            pstmt.setDouble(6, articulo.getValorTasado());
+            pstmt.setString(7, articulo.getDescripcion());
 
-            if (articulo.getFechaAvaluo() != null) {
-                pstmt.setDate(8, new java.sql.Date(articulo.getFechaAvaluo().getTime()));
-            } else {
-                pstmt.setDate(8, new java.sql.Date(System.currentTimeMillis()));
-            }
+            System.out.println("  → SQL: " + sql);
+            System.out.println("  → Parámetros: ID=" + articulo.getIdArticulo() +
+                             ", ID_CLIENTE=" + articulo.getIdCliente() +
+                             ", TIPO=" + articulo.getTipoArticulo() +
+                             ", ESTADO=" + articulo.getEstado() +
+                             ", VALOR=" + articulo.getValorTasado());
 
             int filas = pstmt.executeUpdate();
             System.out.println("  ✓ INSERT en ARTICULO: " + filas + " fila(s) insertada(s)");
@@ -75,6 +76,8 @@ public class ArticuloDAO {
             System.err.println("✗ Error al insertar artículo");
             System.err.println("  Mensaje: " + e.getMessage());
             System.err.println("  Código SQL: " + e.getErrorCode());
+            System.err.println("  Estado SQL: " + e.getSQLState());
+            e.printStackTrace();
 
             try {
                 if (conn != null) {
@@ -113,9 +116,8 @@ public class ArticuloDAO {
             conn = ConexionOracle.getConexion();
             System.out.println("→ Buscando artículo con ID: " + idArticulo);
 
-            String sql = "SELECT ID_ARTICULO, TIPO_ARTICULO, DESCRIPCION_ARTICULO, " +
-                        "VALOR_TASADO, ESTADO, PRECIO_MERCADO_BASE, PORCENTAJE_TASACION, " +
-                        "FECHA_AVALUO, ID_CLIENTE_ORIGINAL, FECHA_TRANSFERENCIA " +
+            // Esquema real
+            String sql = "SELECT ID_ARTICULO, ID_CLIENTE, NOMBRE, TIPO_ARTICULO, ESTADO, VALOR_TASADO, DESCRIPCION " +
                         "FROM ARTICULO WHERE ID_ARTICULO = ?";
 
             pstmt = conn.prepareStatement(sql);
@@ -126,19 +128,14 @@ public class ArticuloDAO {
             if (rs.next()) {
                 articulo = new Articulo();
                 articulo.setIdArticulo(rs.getInt("ID_ARTICULO"));
+                articulo.setIdCliente(rs.getInt("ID_CLIENTE"));
+                articulo.setNombre(rs.getString("NOMBRE"));
                 articulo.setTipoArticulo(rs.getString("TIPO_ARTICULO"));
-                articulo.setDescripcion(rs.getString("DESCRIPCION_ARTICULO"));
-                articulo.setValorTasado(rs.getDouble("VALOR_TASADO"));
                 articulo.setEstado(rs.getString("ESTADO"));
-                articulo.setPrecioMercadoBase(rs.getDouble("PRECIO_MERCADO_BASE"));
-                articulo.setPorcentajeTasacion(rs.getDouble("PORCENTAJE_TASACION"));
+                articulo.setValorTasado(rs.getDouble("VALOR_TASADO"));
+                articulo.setDescripcion(rs.getString("DESCRIPCION"));
 
-                java.sql.Date fechaAvaluo = rs.getDate("FECHA_AVALUO");
-                if (fechaAvaluo != null) {
-                    articulo.setFechaAvaluo(new java.util.Date(fechaAvaluo.getTime()));
-                }
-
-                System.out.println("✓ Artículo encontrado: " + articulo.getTipoArticulo());
+                System.out.println("✓ Artículo encontrado: " + articulo.getNombre());
             } else {
                 System.out.println("  ⚠ No se encontró artículo con ID: " + idArticulo);
             }
@@ -175,9 +172,8 @@ public class ArticuloDAO {
             conn = ConexionOracle.getConexion();
             System.out.println("→ Listando todos los artículos");
 
-            String sql = "SELECT ID_ARTICULO, TIPO_ARTICULO, DESCRIPCION_ARTICULO, " +
-                        "VALOR_TASADO, ESTADO, PRECIO_MERCADO_BASE, PORCENTAJE_TASACION, " +
-                        "FECHA_AVALUO FROM ARTICULO ORDER BY ID_ARTICULO DESC";
+            String sql = "SELECT ID_ARTICULO, ID_CLIENTE, NOMBRE, TIPO_ARTICULO, ESTADO, VALOR_TASADO, DESCRIPCION " +
+                        "FROM ARTICULO ORDER BY ID_ARTICULO DESC";
 
             stmt = conn.createStatement();
             rs = stmt.executeQuery(sql);
@@ -185,22 +181,17 @@ public class ArticuloDAO {
             while (rs.next()) {
                 Articulo articulo = new Articulo();
                 articulo.setIdArticulo(rs.getInt("ID_ARTICULO"));
+                articulo.setIdCliente(rs.getInt("ID_CLIENTE"));
+                articulo.setNombre(rs.getString("NOMBRE"));
                 articulo.setTipoArticulo(rs.getString("TIPO_ARTICULO"));
-                articulo.setDescripcion(rs.getString("DESCRIPCION_ARTICULO"));
-                articulo.setValorTasado(rs.getDouble("VALOR_TASADO"));
                 articulo.setEstado(rs.getString("ESTADO"));
-                articulo.setPrecioMercadoBase(rs.getDouble("PRECIO_MERCADO_BASE"));
-                articulo.setPorcentajeTasacion(rs.getDouble("PORCENTAJE_TASACION"));
-
-                java.sql.Date fechaAvaluo = rs.getDate("FECHA_AVALUO");
-                if (fechaAvaluo != null) {
-                    articulo.setFechaAvaluo(new java.util.Date(fechaAvaluo.getTime()));
-                }
+                articulo.setValorTasado(rs.getDouble("VALOR_TASADO"));
+                articulo.setDescripcion(rs.getString("DESCRIPCION"));
 
                 articulos.add(articulo);
             }
 
-            System.out.println("✓ Total de artículos encontrados: " + articulos.size());
+            System.out.println("✓ Se encontraron " + articulos.size() + " artículos");
 
         } catch (SQLException e) {
             System.err.println("✗ Error al listar artículos");
@@ -220,11 +211,65 @@ public class ArticuloDAO {
     }
 
     /**
-     * Lista artículos disponibles (óptimos o buenos) para ser empeñados.
+     * Lista solo los artículos disponibles para préstamos.
      *
      * @return lista de artículos disponibles
      */
     public List<Articulo> listarArticulosDisponibles() {
+        List<Articulo> articulos = new ArrayList<>();
+        Connection conn = null;
+        Statement stmt = null;
+        ResultSet rs = null;
+
+        try {
+            conn = ConexionOracle.getConexion();
+            System.out.println("→ Listando artículos disponibles");
+
+            String sql = "SELECT ID_ARTICULO, ID_CLIENTE, NOMBRE, TIPO_ARTICULO, ESTADO, VALOR_TASADO, DESCRIPCION " +
+                        "FROM ARTICULO WHERE ESTADO = 'DISPONIBLE' ORDER BY ID_ARTICULO DESC";
+
+            stmt = conn.createStatement();
+            rs = stmt.executeQuery(sql);
+
+            while (rs.next()) {
+                Articulo articulo = new Articulo();
+                articulo.setIdArticulo(rs.getInt("ID_ARTICULO"));
+                articulo.setIdCliente(rs.getInt("ID_CLIENTE"));
+                articulo.setNombre(rs.getString("NOMBRE"));
+                articulo.setTipoArticulo(rs.getString("TIPO_ARTICULO"));
+                articulo.setEstado(rs.getString("ESTADO"));
+                articulo.setValorTasado(rs.getDouble("VALOR_TASADO"));
+                articulo.setDescripcion(rs.getString("DESCRIPCION"));
+
+                articulos.add(articulo);
+            }
+
+            System.out.println("✓ Se encontraron " + articulos.size() + " artículos disponibles");
+
+        } catch (SQLException e) {
+            System.err.println("✗ Error al listar artículos disponibles");
+            System.err.println("  Mensaje: " + e.getMessage());
+            e.printStackTrace();
+
+        } finally {
+            try {
+                if (rs != null) rs.close();
+                if (stmt != null) stmt.close();
+            } catch (SQLException e) {
+                System.err.println("  ✗ Error al cerrar recursos: " + e.getMessage());
+            }
+        }
+
+        return articulos;
+    }
+
+    /**
+     * Lista todos los artículos de un cliente específico.
+     *
+     * @param idCliente ID del cliente propietario
+     * @return lista de artículos del cliente
+     */
+    public List<Articulo> listarArticulosPorCliente(int idCliente) {
         List<Articulo> articulos = new ArrayList<>();
         Connection conn = null;
         PreparedStatement pstmt = null;
@@ -232,42 +277,32 @@ public class ArticuloDAO {
 
         try {
             conn = ConexionOracle.getConexion();
-            System.out.println("→ Listando artículos disponibles");
+            System.out.println("→ Listando artículos del cliente ID: " + idCliente);
 
-            String sql = "SELECT ID_ARTICULO, TIPO_ARTICULO, DESCRIPCION_ARTICULO, " +
-                        "VALOR_TASADO, ESTADO, PRECIO_MERCADO_BASE, PORCENTAJE_TASACION, " +
-                        "FECHA_AVALUO FROM ARTICULO " +
-                        "WHERE ESTADO IN ('OPTIMO', 'BUENO') " +
-                        "AND ID_ARTICULO NOT IN (" +
-                        "  SELECT ID_ARTICULO FROM PRESTAMO " +
-                        "  WHERE ESTADO_PRESTAMO IN ('ACTIVO', 'EN_MORA')" +
-                        ") ORDER BY VALOR_TASADO DESC";
+            String sql = "SELECT ID_ARTICULO, ID_CLIENTE, NOMBRE, TIPO_ARTICULO, ESTADO, VALOR_TASADO, DESCRIPCION " +
+                        "FROM ARTICULO WHERE ID_CLIENTE = ? ORDER BY ID_ARTICULO DESC";
 
             pstmt = conn.prepareStatement(sql);
+            pstmt.setInt(1, idCliente);
             rs = pstmt.executeQuery();
 
             while (rs.next()) {
                 Articulo articulo = new Articulo();
                 articulo.setIdArticulo(rs.getInt("ID_ARTICULO"));
+                articulo.setIdCliente(rs.getInt("ID_CLIENTE"));
+                articulo.setNombre(rs.getString("NOMBRE"));
                 articulo.setTipoArticulo(rs.getString("TIPO_ARTICULO"));
-                articulo.setDescripcion(rs.getString("DESCRIPCION_ARTICULO"));
-                articulo.setValorTasado(rs.getDouble("VALOR_TASADO"));
                 articulo.setEstado(rs.getString("ESTADO"));
-                articulo.setPrecioMercadoBase(rs.getDouble("PRECIO_MERCADO_BASE"));
-                articulo.setPorcentajeTasacion(rs.getDouble("PORCENTAJE_TASACION"));
-
-                java.sql.Date fechaAvaluo = rs.getDate("FECHA_AVALUO");
-                if (fechaAvaluo != null) {
-                    articulo.setFechaAvaluo(new java.util.Date(fechaAvaluo.getTime()));
-                }
+                articulo.setValorTasado(rs.getDouble("VALOR_TASADO"));
+                articulo.setDescripcion(rs.getString("DESCRIPCION"));
 
                 articulos.add(articulo);
             }
 
-            System.out.println("✓ Artículos disponibles: " + articulos.size());
+            System.out.println("✓ Se encontraron " + articulos.size() + " artículos del cliente");
 
         } catch (SQLException e) {
-            System.err.println("✗ Error al listar artículos disponibles");
+            System.err.println("✗ Error al listar artículos del cliente");
             System.err.println("  Mensaje: " + e.getMessage());
             e.printStackTrace();
 
@@ -299,31 +334,19 @@ public class ArticuloDAO {
 
             conn.setAutoCommit(false);
 
-            String sql = "UPDATE ARTICULO SET " +
-                        "TIPO_ARTICULO = ?, DESCRIPCION_ARTICULO = ?, " +
-                        "VALOR_TASADO = ?, ESTADO = ?, " +
-                        "PRECIO_MERCADO_BASE = ?, PORCENTAJE_TASACION = ?, " +
-                        "FECHA_AVALUO = ? " +
-                        "WHERE ID_ARTICULO = ?";
+            String sql = "UPDATE ARTICULO SET NOMBRE = ?, TIPO_ARTICULO = ?, ESTADO = ?, " +
+                        "VALOR_TASADO = ?, DESCRIPCION = ? WHERE ID_ARTICULO = ?";
 
             pstmt = conn.prepareStatement(sql);
-            pstmt.setString(1, articulo.getTipoArticulo());
-            pstmt.setString(2, articulo.getDescripcion());
-            pstmt.setDouble(3, articulo.getValorTasado());
-            pstmt.setString(4, articulo.getEstado());
-            pstmt.setDouble(5, articulo.getPrecioMercadoBase());
-            pstmt.setDouble(6, articulo.getPorcentajeTasacion());
-
-            if (articulo.getFechaAvaluo() != null) {
-                pstmt.setDate(7, new java.sql.Date(articulo.getFechaAvaluo().getTime()));
-            } else {
-                pstmt.setDate(7, new java.sql.Date(System.currentTimeMillis()));
-            }
-
-            pstmt.setInt(8, articulo.getIdArticulo());
+            pstmt.setString(1, articulo.getNombre());
+            pstmt.setString(2, articulo.getTipoArticulo());
+            pstmt.setString(3, articulo.getEstado());
+            pstmt.setDouble(4, articulo.getValorTasado());
+            pstmt.setString(5, articulo.getDescripcion());
+            pstmt.setInt(6, articulo.getIdArticulo());
 
             int filas = pstmt.executeUpdate();
-            System.out.println("  ✓ UPDATE en ARTICULO: " + filas + " fila(s) actualizada(s)");
+            System.out.println("  ✓ UPDATE: " + filas + " fila(s) actualizada(s)");
 
             if (filas > 0) {
                 conn.commit();
@@ -332,14 +355,13 @@ public class ArticuloDAO {
                 return true;
             } else {
                 conn.rollback();
-                System.err.println("  ✗ Rollback: No se actualizó el artículo");
+                System.err.println("  ✗ Rollback: No se actualizó ningún artículo");
                 return false;
             }
 
         } catch (SQLException e) {
             System.err.println("✗ Error al actualizar artículo");
             System.err.println("  Mensaje: " + e.getMessage());
-            System.err.println("  Código SQL: " + e.getErrorCode());
 
             try {
                 if (conn != null) {
@@ -363,8 +385,8 @@ public class ArticuloDAO {
     }
 
     /**
-     * Elimina un artículo de la base de datos con validaciones.
-     * No permite eliminar si el artículo está en un préstamo activo.
+     * Elimina un artículo de la base de datos.
+     * Validación: no se puede eliminar si está asociado a un préstamo activo.
      *
      * @param idArticulo ID del artículo a eliminar
      * @return true si la eliminación fue exitosa, false en caso contrario
@@ -381,21 +403,17 @@ public class ArticuloDAO {
 
             conn.setAutoCommit(false);
 
-            // VALIDACIÓN: Verificar que no esté en préstamo activo
-            String sqlCheck = "SELECT COUNT(*) AS TOTAL FROM PRESTAMO " +
-                            "WHERE ID_ARTICULO = ? AND ESTADO_PRESTAMO IN ('ACTIVO', 'EN_MORA')";
-
+            // Verificar si el artículo está en un préstamo activo
+            String sqlCheck = "SELECT COUNT(*) FROM PRESTAMO WHERE ID_ARTICULO = ? AND ESTADO_PRESTAMO = 'ACTIVO'";
             pstmtCheck = conn.prepareStatement(sqlCheck);
             pstmtCheck.setInt(1, idArticulo);
             rs = pstmtCheck.executeQuery();
 
-            if (rs.next() && rs.getInt("TOTAL") > 0) {
-                System.err.println("✗ ERROR: No se puede eliminar. El artículo está en préstamo activo");
+            if (rs.next() && rs.getInt(1) > 0) {
+                System.err.println("✗ ERROR: No se puede eliminar. El artículo está en un préstamo activo");
                 conn.rollback();
                 return false;
             }
-            rs.close();
-            pstmtCheck.close();
 
             // Proceder con la eliminación
             String sqlDelete = "DELETE FROM ARTICULO WHERE ID_ARTICULO = ?";
@@ -403,7 +421,7 @@ public class ArticuloDAO {
             pstmtDelete.setInt(1, idArticulo);
 
             int filas = pstmtDelete.executeUpdate();
-            System.out.println("  ✓ DELETE en ARTICULO: " + filas + " fila(s) eliminada(s)");
+            System.out.println("  ✓ DELETE: " + filas + " fila(s) eliminada(s)");
 
             if (filas > 0) {
                 conn.commit();
@@ -412,14 +430,13 @@ public class ArticuloDAO {
                 return true;
             } else {
                 conn.rollback();
-                System.err.println("  ⚠ No se encontró artículo para eliminar");
+                System.err.println("  ✗ Rollback: No se encontró el artículo a eliminar");
                 return false;
             }
 
         } catch (SQLException e) {
             System.err.println("✗ Error al eliminar artículo");
             System.err.println("  Mensaje: " + e.getMessage());
-            System.err.println("  Código SQL: " + e.getErrorCode());
 
             try {
                 if (conn != null) {
@@ -445,74 +462,9 @@ public class ArticuloDAO {
     }
 
     /**
-     * Lista todos los artículos de un cliente específico.
-     *
-     * @param idCliente ID del cliente
-     * @return lista de artículos del cliente
-     */
-    public List<Articulo> listarArticulosPorCliente(int idCliente) {
-        List<Articulo> articulos = new ArrayList<>();
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
-
-        try {
-            conn = ConexionOracle.getConexion();
-            System.out.println("→ Listando artículos del cliente ID: " + idCliente);
-
-            String sql = "SELECT a.ID_ARTICULO, a.TIPO_ARTICULO, a.DESCRIPCION_ARTICULO, " +
-                        "a.VALOR_TASADO, a.ESTADO, a.PRECIO_MERCADO_BASE, a.PORCENTAJE_TASACION, " +
-                        "a.FECHA_AVALUO " +
-                        "FROM ARTICULO a " +
-                        "JOIN PRESTAMO p ON a.ID_ARTICULO = p.ID_ARTICULO " +
-                        "WHERE p.ID_CLIENTE = ? " +
-                        "ORDER BY a.FECHA_AVALUO DESC";
-
-            pstmt = conn.prepareStatement(sql);
-            pstmt.setInt(1, idCliente);
-            rs = pstmt.executeQuery();
-
-            while (rs.next()) {
-                Articulo articulo = new Articulo();
-                articulo.setIdArticulo(rs.getInt("ID_ARTICULO"));
-                articulo.setTipoArticulo(rs.getString("TIPO_ARTICULO"));
-                articulo.setDescripcion(rs.getString("DESCRIPCION_ARTICULO"));
-                articulo.setValorTasado(rs.getDouble("VALOR_TASADO"));
-                articulo.setEstado(rs.getString("ESTADO"));
-                articulo.setPrecioMercadoBase(rs.getDouble("PRECIO_MERCADO_BASE"));
-                articulo.setPorcentajeTasacion(rs.getDouble("PORCENTAJE_TASACION"));
-
-                java.sql.Date fechaAvaluo = rs.getDate("FECHA_AVALUO");
-                if (fechaAvaluo != null) {
-                    articulo.setFechaAvaluo(new java.util.Date(fechaAvaluo.getTime()));
-                }
-
-                articulos.add(articulo);
-            }
-
-            System.out.println("✓ Artículos del cliente: " + articulos.size());
-
-        } catch (SQLException e) {
-            System.err.println("✗ Error al listar artículos por cliente");
-            System.err.println("  Mensaje: " + e.getMessage());
-            e.printStackTrace();
-
-        } finally {
-            try {
-                if (rs != null) rs.close();
-                if (pstmt != null) pstmt.close();
-            } catch (SQLException e) {
-                System.err.println("  ✗ Error al cerrar recursos: " + e.getMessage());
-            }
-        }
-
-        return articulos;
-    }
-
-    /**
      * Lista artículos filtrados por estado.
      *
-     * @param estado Estado del artículo (OPTIMO, BUENO, REGULAR, DEFECTUOSO, PROPIEDAD_CASA)
+     * @param estado el estado de los artículos a buscar
      * @return lista de artículos con el estado especificado
      */
     public List<Articulo> listarArticulosPorEstado(String estado) {
@@ -525,10 +477,8 @@ public class ArticuloDAO {
             conn = ConexionOracle.getConexion();
             System.out.println("→ Listando artículos con estado: " + estado);
 
-            String sql = "SELECT ID_ARTICULO, TIPO_ARTICULO, DESCRIPCION_ARTICULO, " +
-                        "VALOR_TASADO, ESTADO, PRECIO_MERCADO_BASE, PORCENTAJE_TASACION, " +
-                        "FECHA_AVALUO FROM ARTICULO " +
-                        "WHERE ESTADO = ? ORDER BY FECHA_AVALUO DESC";
+            String sql = "SELECT ID_ARTICULO, ID_CLIENTE, NOMBRE, TIPO_ARTICULO, ESTADO, VALOR_TASADO, DESCRIPCION " +
+                        "FROM ARTICULO WHERE ESTADO = ? ORDER BY ID_ARTICULO DESC";
 
             pstmt = conn.prepareStatement(sql);
             pstmt.setString(1, estado);
@@ -537,22 +487,17 @@ public class ArticuloDAO {
             while (rs.next()) {
                 Articulo articulo = new Articulo();
                 articulo.setIdArticulo(rs.getInt("ID_ARTICULO"));
+                articulo.setIdCliente(rs.getInt("ID_CLIENTE"));
+                articulo.setNombre(rs.getString("NOMBRE"));
                 articulo.setTipoArticulo(rs.getString("TIPO_ARTICULO"));
-                articulo.setDescripcion(rs.getString("DESCRIPCION_ARTICULO"));
-                articulo.setValorTasado(rs.getDouble("VALOR_TASADO"));
                 articulo.setEstado(rs.getString("ESTADO"));
-                articulo.setPrecioMercadoBase(rs.getDouble("PRECIO_MERCADO_BASE"));
-                articulo.setPorcentajeTasacion(rs.getDouble("PORCENTAJE_TASACION"));
-
-                java.sql.Date fechaAvaluo = rs.getDate("FECHA_AVALUO");
-                if (fechaAvaluo != null) {
-                    articulo.setFechaAvaluo(new java.util.Date(fechaAvaluo.getTime()));
-                }
+                articulo.setValorTasado(rs.getDouble("VALOR_TASADO"));
+                articulo.setDescripcion(rs.getString("DESCRIPCION"));
 
                 articulos.add(articulo);
             }
 
-            System.out.println("✓ Artículos encontrados: " + articulos.size());
+            System.out.println("✓ Se encontraron " + articulos.size() + " artículos");
 
         } catch (SQLException e) {
             System.err.println("✗ Error al listar artículos por estado");
@@ -570,5 +515,45 @@ public class ArticuloDAO {
 
         return articulos;
     }
-}
 
+    /**
+     * Obtiene el siguiente ID disponible para un nuevo artículo.
+     *
+     * @return el siguiente ID disponible
+     */
+    public int obtenerSiguienteId() {
+        Connection conn = null;
+        Statement stmt = null;
+        ResultSet rs = null;
+        int siguienteId = 1;
+
+        try {
+            conn = ConexionOracle.getConexion();
+
+            String sql = "SELECT NVL(MAX(ID_ARTICULO), 0) + 1 AS SIGUIENTE_ID FROM ARTICULO";
+            stmt = conn.createStatement();
+            rs = stmt.executeQuery(sql);
+
+            if (rs.next()) {
+                siguienteId = rs.getInt("SIGUIENTE_ID");
+            }
+
+            System.out.println("→ Siguiente ID disponible: " + siguienteId);
+
+        } catch (SQLException e) {
+            System.err.println("✗ Error al obtener siguiente ID");
+            System.err.println("  Mensaje: " + e.getMessage());
+            e.printStackTrace();
+
+        } finally {
+            try {
+                if (rs != null) rs.close();
+                if (stmt != null) stmt.close();
+            } catch (SQLException e) {
+                System.err.println("  ✗ Error al cerrar recursos: " + e.getMessage());
+            }
+        }
+
+        return siguienteId;
+    }
+}

@@ -66,6 +66,11 @@ public class Articulo {
     private double porcentajeTasacion;
 
     /**
+     * Nombre del cliente propietario (campo auxiliar para mostrar en UI)
+     */
+    private String nombreCliente;
+
+    /**
      * Constructor vacío de la clase Articulo.
      */
     public Articulo() {
@@ -303,6 +308,24 @@ public class Articulo {
      */
     public void setPorcentajeTasacion(double porcentajeTasacion) {
         this.porcentajeTasacion = porcentajeTasacion;
+    }
+
+    /**
+     * Obtiene el nombre del cliente propietario.
+     *
+     * @return nombreCliente nombre del cliente propietario
+     */
+    public String getNombreCliente() {
+        return nombreCliente;
+    }
+
+    /**
+     * Establece el nombre del cliente propietario.
+     *
+     * @param nombreCliente nombre del cliente propietario
+     */
+    public void setNombreCliente(String nombreCliente) {
+        this.nombreCliente = nombreCliente;
     }
 
     /**
