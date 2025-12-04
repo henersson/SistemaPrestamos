@@ -10,7 +10,7 @@
     <orderEntry type="module-library">
       <library>
         <CLASSES>
-          <root url="jar://C:/app/DELTA/product/21c/dbhomeXE/jdbc/lib/ojdbc8.jar!/" />
+          <root url="jar://$MODULE_DIR$/lib/ojdbc8-23.26.0.0.0.jar!/" />
         </CLASSES>
         <JAVADOC />
         <SOURCES />
